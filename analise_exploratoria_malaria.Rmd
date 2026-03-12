@@ -1,0 +1,200 @@
+---
+title: "Análise Exploratória - Malária"
+output: html_notebook
+---
+
+
+```{r}
+# Pacotes transformação de dados
+install.packages(c("tidyverse", "lubridate"))
+
+# Pacotes plotagem
+install.packages(c("geobr","sf","ggplot2","dplyr"))
+
+library(tidyverse)
+library(lubridate)
+library(geobr)
+library(sf)
+library(ggplot2)
+library(dplyr)
+```
+
+```{r}
+# Carregamento de dts
+load("malaria_2016.RData")
+malaria_2016 <- data
+
+load("malaria_2017.RData")
+malaria_2017 <- data
+
+load("malaria_2018.RData")
+malaria_2018 <- data
+
+load("malaria_2019.RData")
+malaria_2019 <- data
+
+ls()
+```
+
+```{r}
+# Junção de dts
+malaria <- bind_rows(
+  malaria_2016,
+  malaria_2017,
+  malaria_2018,
+  malaria_2019
+)
+```
+
+```{r}
+# Verificação dos dados
+glimpse(malaria)
+```
+
+```{r}
+# Transformação de tipagem de colunas
+malaria <- malaria %>%
+  mutate(
+    notification.month = as.numeric(as.character(notification.month)),
+    notification.year = as.numeric(as.character(notification.year)),
+    exam.month = as.numeric(as.character(exam.month)),
+    exam.year = as.numeric(as.character(exam.year)),
+    treatment.month = as.numeric(as.character(treatment.month)),
+    treatment.year = as.numeric(as.character(treatment.year)),
+    symptom.month = as.numeric(as.character(symptom.month)),
+    symptom.year = as.numeric(as.character(symptom.year))
+  )
+```
+
+```{r}
+# Verificação de tipagem alterada
+glimpse(malaria)
+```
+```{r}
+# Filtragem para dados dentro do escopo a ser analisado 2016-2019
+malaria <- malaria %>%
+  filter(notification.year >= 2016 & notification.year <= 2019)
+```
+
+```{r}
+# Filtragem de linhas únicas (foi de 6.391.535 para 936.719 observações)
+malaria <- malaria %>%
+  distinct()
+```
+
+```{r}
+# Criação de coluna data de notificação
+malaria <- malaria %>%
+  mutate(
+    notification.date = as.Date(
+      paste(notification.year, notification.month, "01", sep="-")
+    )
+  )
+```
+
+```{r}
+# Análise de valores do campo exam.result
+unique(malaria$exam.result)
+```
+
+```{r}
+# Criação de campo malaria.type
+malaria <- malaria %>%
+  mutate(
+    malaria.type = case_when(
+      exam.result == "negative" ~ "Negativo",
+      exam.result == "vivax" ~ "Vivax",
+      exam.result == "falciparum" ~ "Falciparum",
+      TRUE ~ "Outros"
+    )
+  )
+```
+
+```{r}
+# Cálculo de percentual de positivos no Brasil
+total_brasil <- nrow(malaria)
+
+
+estado_resumo <- malaria %>%
+  mutate(
+    positive = exam.result != "negative"
+  ) %>%
+  group_by(notification.state) %>%
+  summarise(
+    positivos = sum(positive, na.rm = TRUE)
+  ) %>%
+  mutate(percentual = positivos/total_brasil*100)
+```
+
+```{r}
+br_states <- read_state()
+```
+```{r}
+estado_resumo <- estado_resumo %>%
+  rename(abbrev_state = notification.state)
+```
+
+```{r}
+mapa <- br_states %>%
+  left_join(estado_resumo, by="abbrev_state")
+```
+
+```{r}
+# Plotagem de gráfico de mapa do Brasil com a proporção de positivos por estado
+ggplot(mapa) +
+  geom_sf(aes(fill = percentual)) +
+  scale_fill_viridis_c(option="plasma", na.value="grey90") +
+  labs(
+    title = "Distribuição espacial da proporção de casos positivos\n de malária no Brasil (2016–2019)",
+    fill = "Percentual (%)"
+  ) +
+  theme_minimal() + 
+  theme(
+    plot.title = element_text(hjust = 0.5)
+  )
+```
+```{r}
+estado_resumo
+total_brasil
+table(malaria$exam.result)
+```
+```{r}
+unique(malaria$notification.state)
+```
+```{r}
+malaria <- malaria %>%
+  mutate(
+    exam.binary = ifelse(exam.result == "negative", "Negativo", "Positivo")
+  )
+```
+
+```{r}
+# Variável que armazena o tipo de malária por data de notificação
+casos_tempo <- malaria %>%
+  group_by(notification.date, malaria.type) %>%
+  summarise(
+    total = n(),
+    .groups = "drop"
+  )
+```
+
+```{r}
+# Plotagem do gráfico de evolução temporal dos tipos de malária
+ggplot(casos_tempo,
+       aes(x = notification.date,
+           y = total,
+           color = malaria.type)) +
+  geom_line(size = 1) +
+  labs(
+    title = "Evolução dos tipos de malária (2016–2019)",
+    x = "Data",
+    y = "Número de exames",
+    color = "Resultado"
+  ) +
+  theme_minimal() + 
+  theme(
+    plot.title = element_text(hjust = 0.5)
+  )
+```
+
+
