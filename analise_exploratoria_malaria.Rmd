@@ -201,8 +201,8 @@ ggplot(casos_tempo,
            color = exam.binary)) +
   geom_line(size = 1) +
   labs(
-    title = "Evolução dos tipos de malária (2016–2019)",
-    x = "Data",
+    title = "Evolução dos casos de malária (2016–2019)",
+    x = "Ano",
     y = "Número de exames",
     color = "Resultado"
   ) +
@@ -227,5 +227,31 @@ malaria %>%
 
 ```{r}
 names(mapa)
+```
+
+```{r}
+malaria <- malaria %>%
+  filter(exam.result != "negative") %>%
+  mutate(
+    malaria.type_group = ifelse(exam.result == "falciparum", "Falciparum",
+                         ifelse(exam.result == "vivax", "Vivax", "Outros"))
+  )
+```
+
+
+```{r}
+# Plotagem do gráfico de evolução temporal dos tipos de malária
+ggplot(malaria, aes(x = notification.year, fill = malaria.type_group)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(
+    title = "Distribuição dos resultados positivos de exame de malária",
+    x = "Ano",
+    y = "Número de casos",
+    fill = "" 
+  ) + 
+  theme(
+    plot.title = element_text(hjust = 0.5)
+  )
 ```
 
