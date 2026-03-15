@@ -255,3 +255,26 @@ ggplot(malaria, aes(x = notification.year, fill = malaria.type_group)) +
   )
 ```
 
+```{r}
+malaria <- malaria %>%
+group_by(race) %>%
+summarize(n = n()) %>%
+mutate(proportion = n / sum(n))
+
+ggplot(malaria, aes(x = "", y = race, fill = race)) +
+  geom_col(width=1) +
+  coord_polar(theta = "y")
+  theme_minimal() +
+  labs(
+    title = "Distribuição dos resultados positivos de exame de malária",
+    x = "Ano",
+    y = "Número de casos",
+    fill = "" 
+  ) + 
+  theme(
+    plot.title = element_text(hjust = 0.5)
+  )
+
+
+```
+
