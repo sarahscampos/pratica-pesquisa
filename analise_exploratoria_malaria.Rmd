@@ -259,22 +259,42 @@ ggplot(malaria, aes(x = notification.year, fill = malaria.type_group)) +
 malaria <- malaria %>%
 group_by(race) %>%
 summarize(n = n()) %>%
-mutate(proportion = n / sum(n))
+mutate(
+  proportion = n / sum(n),
+  label = percent(proportion, accuracy = 0.1),
+  )
 
 ggplot(malaria, aes(x = "", y = race, fill = race)) +
   geom_col(width=1) +
-  coord_polar(theta = "y")
+  coord_polar(theta = "y") +
+  geom_text(aes(label = label), 
+            position = position_stack(vjust = 0.5)) +
   theme_minimal() +
   labs(
     title = "Distribuição dos resultados positivos de exame de malária",
-    x = "Ano",
+    x = "Anos 2016-2019",
     y = "Número de casos",
     fill = "" 
   ) + 
   theme(
-    plot.title = element_text(hjust = 0.5)
+    plot.title = element_text(hjust = 0.5),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
   )
 
 
 ```
+```{r}
+#Medidas de Tendência Central
+media_masc = avarage(
+  malaria[malaria$gender = "male", c("", "", "")]
+)
+media_fem = avarage(
+  #consulta casos positivos feminino
+)
+
+mediana = 
+```
+
 
