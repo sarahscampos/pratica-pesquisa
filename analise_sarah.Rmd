@@ -10,12 +10,16 @@ install.packages(c("tidyverse", "lubridate"))
 # Pacotes plotagem
 install.packages(c("geobr","sf","ggplot2","dplyr"))
 
+install.packages(c("skimr"))
+
 library(tidyverse)
 library(lubridate)
 library(geobr)
 library(sf)
 library(ggplot2)
 library(dplyr)
+library(scales)
+library(skimr)
 ```
 
 ```{r}
@@ -48,6 +52,15 @@ malaria <- bind_rows(
 ```{r}
 # Verificação dos dados
 glimpse(malaria)
+
+```
+
+
+```{r}
+str(malaria)
+```
+```{r}
+skim(malaria)
 ```
 
 ```{r}
@@ -176,7 +189,7 @@ table(malaria$exam.result)
 unique(malaria$notification.state)
 ```
 ```{r}
-malaria <- malaria %>%
+malaria_exam_binary <- malaria %>%
   mutate(
     exam.binary = ifelse(is.na(exam.result), NA,
                          ifelse(exam.result == "negative", "Negativo", "Positivo"))
@@ -185,7 +198,7 @@ malaria <- malaria %>%
 
 ```{r}
 # Variável que armazena o tipo de malária por data de notificação
-casos_tempo <- malaria %>%
+casos_tempo <- malaria_exam_binary %>%
   group_by(notification.date, exam.binary) %>%
   summarise(
     total = n(),
@@ -213,24 +226,14 @@ ggplot(casos_tempo,
 ```
 
 
-```{r}
-malaria %>%
-  group_by(exam.result) %>%
-  summarise(n = n())
-```
 
-```{r}
-malaria %>%
-  group_by(exam.binary) %>%
-  summarise(n = n())
-```
 
 ```{r}
 names(mapa)
 ```
 
 ```{r}
-malaria <- malaria %>%
+malaria_type_group <- malaria %>%
   filter(exam.result != "negative") %>%
   mutate(
     malaria.type_group = ifelse(exam.result == "falciparum", "Falciparum",
@@ -239,9 +242,10 @@ malaria <- malaria %>%
 ```
 
 
+
 ```{r}
 # Plotagem do gráfico de evolução temporal dos tipos de malária
-ggplot(malaria, aes(x = notification.year, fill = malaria.type_group)) +
+ggplot(malaria_type_group, aes(x = notification.year, fill = malaria.type_group)) +
   geom_bar() +
   theme_minimal() +
   labs(
@@ -256,7 +260,7 @@ ggplot(malaria, aes(x = notification.year, fill = malaria.type_group)) +
 ```
 
 ```{r}
-malaria <- malaria %>%
+malaria_race <- malaria %>%
 group_by(race) %>%
 summarize(n = n()) %>%
 mutate(
@@ -264,7 +268,7 @@ mutate(
   label = percent(proportion, accuracy = 0.1),
   )
 
-ggplot(malaria, aes(x = "", y = race, fill = race)) +
+ggplot(malaria_race, aes(x = "", y = race, fill = race)) +
   geom_col(width=1) +
   coord_polar(theta = "y") +
   geom_text(aes(label = label), 
@@ -286,15 +290,7 @@ ggplot(malaria, aes(x = "", y = race, fill = race)) +
 
 ```
 ```{r}
-#Medidas de Tendência Central
-media_masc = avarage(
-  malaria[malaria$gender = "male", c("", "", "")]
-)
-media_fem = avarage(
-  #consulta casos positivos feminino
-)
-
-mediana = 
+mean(malaria$qty.parasites, na.rm = TRUE)
 ```
 
 
