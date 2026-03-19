@@ -9,7 +9,7 @@ install.packages(c("tidyverse", "lubridate"))
 
 # Pacotes plotagem
 install.packages(c("geobr","sf","ggplot2","dplyr"))
-
+library(scale)
 library(tidyverse)
 library(lubridate)
 library(geobr)
@@ -287,6 +287,8 @@ ggplot(malaria, aes(x = "", y = race, fill = race)) +
 ```
 ```{r}
 #Medidas de Tendência Central
+mean(qty.parasities$malaria, na.rm = TRUE )
+
 media_masc = avarage(
   malaria[malaria$gender = "male", c("", "", "")]
 )
