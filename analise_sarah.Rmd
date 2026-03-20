@@ -293,4 +293,3 @@ ggplot(malaria_race, aes(x = "", y = race, fill = race)) +
 mean(malaria$qty.parasites, na.rm = TRUE)
 ```
 
-
