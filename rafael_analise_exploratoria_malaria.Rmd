@@ -297,6 +297,9 @@ malaria_qty <- malaria
 any(is.na(malaria_qty$qty.parasites))
 colSums(is.na(malaria_qty))
 
+#total de registros
+length(malaria_qty$qty.parasites)
+
 #Mediadas de Tendencia Central
 #media
 mean(malaria_qty$qty.parasites, na.rm = TRUE)
@@ -350,15 +353,33 @@ kurtosis(malaria_qty$qty.parasites, na.rm = TRUE)
 
 #Gráficos
 #histograma
-ggplot(malaria_qty, aes(x = qty.parasites)) +
-  geom_histogram(bins = 30, fill="steelblue")
+  ggplot(malaria_qty, aes(x = qty.parasites)) +
+    geom_histogram(bins=30, fill="steelblue", na.rm = TRUE) +
+    labs(
+      title = "Distribuição quantidade de parasitas por caso",
+      x = "quantidade de parasitas",
+      fill = "" 
+    ) 
 
 #boxplot(outliers e posição)
-ggplot(malaria_qty, aes(y = qty.parasites)) +
-  geom_boxplot(fill="tomato")
-
+ggplot(malaria_qty, aes(x = gender, y = qty.parasites)) +
+  geom_boxplot(fill="tomato", na.rm = TRUE) +
+  labs(
+    title = "Boxplot",
+    x = "Gender",
+    y = "Quartis",
+    fill=""
+  ) +
+  scale_y_continuous(
+    labels = label_percent(scale = 1/10000)
+  )
+  
 #densidade
-ggplot(malaria_qty, aes(x = qty.parasites)) +
-  geom_density(fill="blue", alpha=0.3)
+ggplot(malaria_qty, aes(x = qty.parasites, color = gender)) +
+  geom_density(fill="gray", alpha=0.05, na.rm = TRUE) +
+  labs(
+    title = "Distribuição da densidade de parasitas",
+    x = "quantidade parasitas"
+  )
 
 ```

@@ -1,0 +1,62 @@
+---
+title: "analise_gustavo"
+output: html_document
+---
+```{r}
+install.packages(c("tidyverse", "lubridate"))
+install.packages(c("geobr","sf","ggplot2","dplyr"))
+
+library(dplyr)
+library(magrittr)
+library(tidyverse)
+library(lubridate)
+library(geobr)
+library(sf)
+library(ggplot2)
+library(dplyr)
+library(scales)
+library(moments)
+```
+
+```{r}
+load("malaria_2016.RData")
+df2016 <- data %>% mutate(ano = 2016)
+
+load("malaria_2017.RData")
+df2017 <- data %>% mutate(ano = 2017)
+
+load("malaria_2018.RData")
+df2018 <- data %>% mutate(ano = 2018)
+
+load("malaria_2019.RData")
+df2019 <- data %>% mutate(ano = 2019)
+
+
+dados_completos <- bind_rows(df2016, df2017, df2018, df2019)
+```
+
+```{r}
+dados_completos <- dados_completos %>%
+  mutate(age = as.numeric(age))
+
+tabela_simetria <- dados_completos %>%
+  group_by(ano) %>%
+  summarise(
+    Media = mean(age, na.rm = TRUE),
+    Mediana = median(age, na.rm = TRUE),
+    Assimetria = skewness(age, na.rm = TRUE)
+  )
+
+print(tabela_simetria)
+```
+```{r}
+ggplot(dados_completos, aes(x = age, fill = as.factor(ano))) +
+  geom_density(alpha = 0.5) +
+  facet_wrap(~ano) +
+  xlim(0, 20) +
+  theme_minimal() +
+  labs(title = "Evolução da Simetria da Idade dos Pacientes (2016-2019)",
+       x = "Idade (age)",
+       y = "Densidade",
+       fill = "Ano")
+```
