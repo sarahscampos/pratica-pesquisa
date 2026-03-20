@@ -260,34 +260,29 @@ ggplot(malaria_type_group, aes(x = notification.year, fill = malaria.type_group)
 ```
 
 ```{r}
-# Plotagem do gráfico de resultados positivos de exame de malária por raça
+# Plotagem do gráfico de colunas de resultados positivos de exame de malária por raça
 malaria_race <- malaria %>%
-group_by(race) %>%
-summarize(n = n()) %>%
-mutate(
-  proportion = n / sum(n),
-  label = percent(proportion, accuracy = 0.1),
+  group_by(race) %>%
+  summarize(n = n()) %>%
+  mutate(
+    proportion = n / sum(n),
+    label = scales::percent(proportion, accuracy = 0.1)
   )
 
-ggplot(malaria_race, aes(x = "", y = race, fill = race)) +
-  geom_col(width=1) +
-  coord_polar(theta = "y") +
+ggplot(malaria_race, aes(x = race, y = n, fill = race)) +
+  geom_col(width = 0.7) +
   geom_text(aes(label = label), 
-            position = position_stack(vjust = 0.5)) +
+            vjust = -0.5) +
   theme_minimal() +
   labs(
     title = "Distribuição dos resultados positivos de exame de malária",
-    x = "Anos 2016-2019",
+    x = "Raça",
     y = "Número de casos",
-    fill = "" 
+    fill = ""
   ) + 
   theme(
-    plot.title = element_text(hjust = 0.5),
-    axis.text = element_blank(),
-    axis.ticks = element_blank(),
-    panel.grid = element_blank(),
+    plot.title = element_text(hjust = 0.5)
   )
-
 
 ```
 
