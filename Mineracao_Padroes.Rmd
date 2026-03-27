@@ -1,0 +1,104 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+```{r}
+
+
+# Apriori
+# Varredura única para obter conjunto de 1-itens frequentes
+
+#Gerar conjuntos candidatos de tamanho (k+1) a partir dos frequentes de tamanho k
+
+# Testar os candidatos comparando com o banco de dados
+
+# Encerrar quando nenhum conjunto frequente ou candidato puder ser gerado
+```
+
+```{r}
+install.packages(c("tidyverse", "lubridate"))
+
+library(tidyverse)
+library(lubridate)
+
+```
+
+
+```{r}
+load("datasets/malaria_2016.RData")
+malaria_2016 <- data
+
+load("datasets/malaria_2017.RData")
+malaria_2017 <- data
+
+load("datasets/malaria_2018.RData")
+malaria_2018 <- data
+
+load("datasets/malaria_2019.RData")
+malaria_2019 <- data
+
+ls()
+
+```
+```{r}
+#junção de dts
+malaria <- bind_rows(
+  malaria_2016,
+  malaria_2017,
+  malaria_2018,
+  malaria_2019
+)
+```
+```{r}
+glimpse(malaria)
+```
+
+```{r}
+#filtragem cols usadas
+malaria <- malaria %>%
+  select(
+    exam.interval,
+    treatment.interval,
+    notification.interval,
+    notification.month,
+    notification.year,
+    migration,
+    autochthonous.case,
+    exam.result,
+    detection.type,
+    exam.type,
+    symptom,
+    hemiparasite,
+    previous.treatment,
+    occupation,
+    education.level,
+    age,
+    race,
+    gender
+  )
+```
+
+```{r}
+#tipagem
+malaria <- malaria %>%
+  mutate(
+    notification.month = as.numeric(as.character(notification.month)),
+    notification.year = as.numeric(as.character(notification.year)),
+  )
+
+glimpse(malaria)
+```
+
+
+
