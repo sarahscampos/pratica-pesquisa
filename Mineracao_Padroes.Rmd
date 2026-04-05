@@ -27,10 +27,11 @@ The preview shows you a rendered HTML copy of the contents of the editor. Conseq
 ```
 
 ```{r}
-install.packages(c("tidyverse", "lubridate"))
+install.packages(c("tidyverse", "lubridate","arules"))
 
 library(tidyverse)
 library(lubridate)
+library(arules)
 
 ```
 
@@ -90,15 +91,32 @@ malaria <- malaria %>%
 ```
 
 ```{r}
-#tipagem
-malaria <- malaria %>%
-  mutate(
-    notification.month = as.numeric(as.character(notification.month)),
-    notification.year = as.numeric(as.character(notification.year)),
-  )
-
-glimpse(malaria)
+# Convertendo todas as colunas para fatores
+malaria <- malaria %>% mutate_all(as.factor)
 ```
 
 
+```{r}
+# Convertendo o dataframe para um objeto de transações
+transacoes_malaria <- as(malaria, "transactions")
+summary(transacoes_malaria)
+```
+
+```{r}
+# Criando a interface unificada fit()
+fit_mineracao <- function(transacoes, algoritmo = "apriori", min_sup = 0.01, min_conf = 0.8, min_len = 3, max_len = 4) {
+  
+    # O artigo define confiança de 80% e tamanhos mínimo 3 e máximo 4
+    regras <- apriori(transacoes, 
+                      parameter = list(supp = min_sup, conf = min_conf, 
+                                       minlen = min_len, maxlen = max_len, target = "rules"))
+    return(regras)
+    
+}
+```
+
+
+```{r}
+regras_apriori <- fit_mineracao(transacoes_malaria, algoritmo = "apriori")
+```
 
