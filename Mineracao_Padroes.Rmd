@@ -91,8 +91,62 @@ malaria <- malaria %>%
 ```
 
 ```{r}
+<<<<<<< Updated upstream
 # Convertendo todas as colunas para fatores
 malaria <- malaria %>% mutate_all(as.factor)
+=======
+#tipagem dos dadoss
+malaria <- malaria %>%
+  mutate(
+    notification.month = as.numeric(as.character(notification.month)),
+    notification.year = as.numeric(as.character(notification.year)),
+  )
+
+glimpse(malaria)
+>>>>>>> Stashed changes
+```
+
+```{r}
+#Rafael - Apriori em desenvolvimento
+#Geração de candidatos
+gerarCandidadtos(L_{k-1}){
+  #SELECT p.item1, p.item2, ..., p.item_{k-1}, q.item_{k-1}
+  #FROM L_{k-1} p, L_{k-1} q
+  #WHERE p.item1 = q.item1 AND 
+  #p.item2 = q.item2 AND 
+  #... AND
+  #p.item_{k-2} = q.item_{k-2} AND
+  #p.item_{k-1} < q.item_{k-1}-- Poda usando subconjuntos infrequentes
+  #AND NOT EXISTS (
+  #SELECT * FROM Infrequent_Sets i
+  #WHERE i.subset_of(p.item1, ..., q.item_{k-1})
+}
+
+#Implementacao Apriori
+#definir limiar
+Apriori(malaria, limiar){
+  L={}
+  k = 2
+  
+  #
+  while L_{k-1} != NULL{
+    C_k = gerarCandidatos(L_{k-1})
+    
+    for malaria in malaria{
+      C_t = subconjunto(C_t) 
+      for c in C_t{
+        c.count += 1
+      }
+    }
+    
+    #buscar representação para linha seguinte
+    #L_k := {c ∈ C_k | c.count ≥ ε};
+    k = k + 1;
+  }
+  #buscar representação para linha seguinte
+  #L := _k L_k
+  return L
+}
 ```
 
 
