@@ -1,0 +1,84 @@
+---
+title: "2-divergent-ranking"
+output: html_document
+---
+
+```{r}
+
+suppressPackageStartupMessages({
+  library(readr)
+  library(dplyr)
+})
+
+# Helper to resolve a file that may be in CWD or under dara/
+resolve_path <- function(fname) {
+  if (file.exists(fname)) return(fname)
+  p <- file.path("dara", fname)
+  if (file.exists(p)) return(p)
+  stop(sprintf("File not found: %s", fname))
+}
+
+# Load data and rules dataset
+data <- read_csv(resolve_path("rj.cat.csv"), show_col_types = FALSE)
+rules_df <- read_csv(resolve_path("dataset.csv"), show_col_types = FALSE)
+
+# Use the same attributes used to generate rules
+data <- subset(data, select = c(
+  "ano","mes","NATUREZA","GESTAO","ZONA","npartos","sem.gest",
+  "n.consultas","idade","escolaridade","apgar","cesarea",
+  "tmn.geral","tmn.pre","tmn.tar"
+))
+
+# Filter to RHS condition (tmn.geral == "alto") for the dataset side
+data <- subset(data, tmn.geral == "alto")
+
+# Remove the RHS attribute from the comparison set
+rhs_attr <- "tmn.geral"
+if (rhs_attr %in% names(data)) data[[rhs_attr]] <- NULL
+
+results <- list()
+
+for (atributo in colnames(data)) {
+  # Frequency table in the dataset (restricted to RHS condition)
+  t_dataset <- table(data[[atributo]])
+
+  # Frequency table in the rules dataset (count of rules having that value on LHS)
+  if (!(atributo %in% colnames(rules_df))) next
+  t_rules <- table(rules_df[[atributo]])
+  if (length(t_rules) == 0) next
+
+  # Align into a single frame
+  df_dataset <- as.data.frame(t_dataset)
+  df_rules <- as.data.frame(t_rules)
+  names(df_dataset) <- c("value","dataset")
+  names(df_rules) <- c("value","rules")
+  merged <- merge(df_dataset, df_rules, by = "value", all.x = TRUE)
+  merged$rules[is.na(merged$rules)] <- 0
+
+  # Divergence counter c
+  merged$c <- 0
+  n <- nrow(merged)
+  if (n > 1) {
+    for (j in 1:(n - 1)) {
+      for (k in (j + 1):n) {
+        if ((merged$dataset[j] > merged$dataset[k]) && (merged$rules[j] < merged$rules[k])) {
+          merged$c[j] <- merged$c[j] - 1
+          merged$c[k] <- merged$c[k] + 1
+        } else if ((merged$dataset[j] < merged$dataset[k]) && (merged$rules[j] > merged$rules[k])) {
+          merged$c[j] <- merged$c[j] + 1
+          merged$c[k] <- merged$c[k] - 1
+        }
+      }
+    }
+  }
+
+  # Order by c and store
+  merged <- merged[order(merged$c), ]
+  results[[atributo]] <- merged
+  print(sprintf("Processed attribute: %s", atributo))
+  print(merged)
+}
+
+
+```
+

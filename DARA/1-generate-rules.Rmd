@@ -1,0 +1,105 @@
+---
+title: "1-generate-rules"
+output: html_document
+---
+
+```{r}
+
+suppressPackageStartupMessages({
+  library(arules)
+  library(arulesViz)
+  library(readr)
+  library(stringr)
+})
+
+# Helper to resolve a file that may be in CWD or under dara/
+resolve_path <- function(fname) {
+  if (file.exists(fname)) return(fname)
+  p <- file.path("dara", fname)
+  if (file.exists(p)) return(p)
+  stop(sprintf("File not found: %s", fname))
+}
+
+# Load categorized dataset
+rj_cat <- read_csv(resolve_path("rj.cat.csv"), show_col_types = FALSE)
+
+# Select attributes of interest
+data <- subset(rj_cat, select = c(
+  "ano","mes","NATUREZA","GESTAO","ZONA","npartos","sem.gest",
+  "n.consultas","idade","escolaridade","apgar","cesarea",
+  "tmn.geral","tmn.pre","tmn.tar"
+))
+
+# Transform to factors
+pf_data <- data.frame(lapply(data, as.factor))
+
+# Generate association rules targeting tmn.geral=alto
+rules <- apriori(
+  pf_data,
+  parameter = list(supp = 0.1, conf = 0.8, minlen = 3, maxlen = 4, target = "rules"),
+  appearance = list(rhs = "tmn.geral=alto"),
+  control = list(verbose = FALSE)
+)
+
+message(sprintf("Number of rules: %d", length(rules)))
+
+# Compute interest measures and filter
+imrules <- interestMeasure(rules, transactions = data)
+rules <- rules[imrules$lift >= 1 & imrules$count > 1]
+message(sprintf("Number of rules (filtering lift & count): %d", length(rules)))
+rules <- rules[!is.redundant(rules)]
+message(sprintf("Number of rules (after redundancy filter): %d", length(rules)))
+
+# Convert to data.frame with interest measures
+imrules <- interestMeasure(rules, transactions = data)
+dataset <- as(rules, "data.frame")
+
+if (length(rules) > 0) {
+  # Split lhs/rhs and normalize RHS label for downstream matching
+  splitted <- str_split(dataset$rules, " => ", simplify = TRUE)
+  dataset <- data.frame(
+    lhs = splitted[, 1],
+    rhs = gsub("_", "=", gsub("tmn.geral=", "", splitted[, 2])),
+    support = dataset$support,
+    confidence = dataset$confidence,
+    lift = imrules$lift,
+    count = imrules$count,
+    kulc = imrules$kulczynski,
+    ir = imrules$imbalance,
+    stringsAsFactors = FALSE
+  )
+}
+
+# Clean braces
+dataset$rhs <- gsub("\\{", "", dataset$rhs)
+dataset$rhs <- gsub("\\}", "", dataset$rhs)
+dataset$lhs <- gsub("\\{", "", dataset$lhs)
+dataset$lhs <- gsub("\\}", "", dataset$lhs)
+
+# Recreate original attribute columns present in data for easier joins later
+for (nm in names(data)) dataset[[nm]] <- NA
+
+# Fill attribute columns according to LHS items
+lhs_items <- str_split(dataset$lhs, ",")
+for (i in seq_along(lhs_items)) {
+  kvs <- lhs_items[[i]]
+  for (kv in kvs) {
+    nv <- str_split(kv, "=", simplify = TRUE)
+    if (ncol(nv) == 2) {
+      dataset[i, trimws(nv[1, 1])] <- trimws(nv[1, 2])
+    }
+  }
+}
+
+# Convert interest measures to numeric explicitly
+num_cols <- c("lift","count","confidence","support","kulc","ir")
+for (nc in num_cols) dataset[[nc]] <- as.numeric(dataset[[nc]])
+
+# Save to dara/dataset.csv
+out_path <- resolve_path("dataset.csv")
+write.csv(dataset, file = out_path, row.names = FALSE)
+message(sprintf("Saved rules dataset to %s", out_path))
+
+
+```
+
