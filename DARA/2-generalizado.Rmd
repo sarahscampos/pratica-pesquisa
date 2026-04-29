@@ -1,0 +1,113 @@
+---
+title: "2-generalizado"
+output: html_document
+---
+
+---
+title: "2-divergent-ranking"
+output: html_document
+---
+
+```{r config}
+# =============================================================================
+# CONFIGURAÇÃO — editar apenas este bloco para usar com qualquer dataset
+# =============================================================================
+
+INPUT_FILE    <- "rj.cat.csv"
+
+SELECTED_COLS <- c(
+  "ano", "mes", "NATUREZA", "GESTAO", "ZONA", "npartos", "sem.gest",
+  "n.consultas", "idade", "escolaridade", "apgar", "cesarea",
+  "tmn.geral", "tmn.pre", "tmn.tar"
+)
+# SELECTED_COLS <- NULL  # descomentar para usar TODAS as colunas
+
+RULES_FILE    <- "dataset.csv"
+
+RHS_ATTR      <- "tmn.geral"
+RHS_VALUE     <- "alto"
+# =============================================================================
+```
+
+```{r setup, message=FALSE, warning=FALSE}
+suppressPackageStartupMessages({
+  library(readr)
+  library(dplyr)
+})
+
+resolve_path <- function(fname) {
+  if (file.exists(fname)) return(fname)
+  p <- file.path("dara", fname)
+  if (file.exists(p)) return(p)
+  stop(sprintf("Arquivo não encontrado: %s", fname))
+}
+```
+
+```{r load-data}
+raw      <- read_csv(resolve_path(INPUT_FILE),  show_col_types = FALSE)
+rules_df <- read_csv(resolve_path(RULES_FILE),  show_col_types = FALSE)
+
+if (!is.null(SELECTED_COLS)) {
+  missing_cols <- setdiff(SELECTED_COLS, names(raw))
+  if (length(missing_cols) > 0)
+    stop(sprintf("Colunas não encontradas: %s", paste(missing_cols, collapse = ", ")))
+  data <- subset(raw, select = SELECTED_COLS)
+} else {
+  data <- raw
+}
+
+if (!(RHS_ATTR %in% names(data)))
+  stop(sprintf("Atributo RHS '%s' não encontrado no dataset.", RHS_ATTR))
+
+message(sprintf("Dataset: %d linhas x %d colunas | Regras: %d", nrow(data), ncol(data), nrow(rules_df)))
+```
+
+```{r filter-and-clean}
+data <- data[data[[RHS_ATTR]] == RHS_VALUE, ]
+message(sprintf("Linhas após filtro '%s == %s': %d", RHS_ATTR, RHS_VALUE, nrow(data)))
+data[[RHS_ATTR]] <- NULL
+```
+
+```{r divergent-ranking}
+results <- list()
+
+for (atributo in colnames(data)) {
+  t_dataset <- table(data[[atributo]])
+
+  if (!(atributo %in% colnames(rules_df))) next
+  t_rules <- table(rules_df[[atributo]])
+  if (length(t_rules) == 0) next
+
+  df_dataset <- as.data.frame(t_dataset, stringsAsFactors = FALSE)
+  df_rules   <- as.data.frame(t_rules,   stringsAsFactors = FALSE)
+  names(df_dataset) <- c("value", "dataset")
+  names(df_rules)   <- c("value", "rules")
+
+  merged       <- merge(df_dataset, df_rules, by = "value", all.x = TRUE)
+  merged$rules[is.na(merged$rules)] <- 0
+  merged$c     <- 0
+  n            <- nrow(merged)
+
+  if (n > 1) {
+    for (j in 1:(n - 1)) {
+      for (k in (j + 1):n) {
+        ds_j <- merged$dataset[j]; ds_k <- merged$dataset[k]
+        ru_j <- merged$rules[j];   ru_k <- merged$rules[k]
+
+        if (ds_j > ds_k && ru_j < ru_k) {
+          merged$c[j] <- merged$c[j] - 1; merged$c[k] <- merged$c[k] + 1
+        } else if (ds_j < ds_k && ru_j > ru_k) {
+          merged$c[j] <- merged$c[j] + 1; merged$c[k] <- merged$c[k] - 1
+        }
+      }
+    }
+  }
+
+  merged              <- merged[order(merged$c), ]
+  results[[atributo]] <- merged
+  message(sprintf("Atributo processado: %s", atributo))
+  print(merged)
+}
+
+message(sprintf("Total de atributos processados: %d", length(results)))
+```
