@@ -13,19 +13,15 @@ output: html_document
 # CONFIGURAÇÃO — editar apenas este bloco para usar com qualquer dataset
 # =============================================================================
 
-INPUT_FILE    <- "rj.cat.csv"
+INPUT_FILE    <- "teste.cat.csv"
 
-SELECTED_COLS <- c(
-  "ano", "mes", "NATUREZA", "GESTAO", "ZONA", "npartos", "sem.gest",
-  "n.consultas", "idade", "escolaridade", "apgar", "cesarea",
-  "tmn.geral", "tmn.pre", "tmn.tar"
-)
+SELECTED_COLS <- NULL
 # SELECTED_COLS <- NULL  # descomentar para usar TODAS as colunas
 
-RULES_FILE    <- "dataset.csv"
+RULES_FILE    <- "dataset1.csv"
 
-RHS_ATTR      <- "tmn.geral"
-RHS_VALUE     <- "alto"
+RHS_ATTR      <- "desfecho"
+RHS_VALUE     <- "grave"
 # =============================================================================
 ```
 

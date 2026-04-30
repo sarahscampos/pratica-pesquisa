@@ -13,26 +13,22 @@ output: html_document
 # CONFIGURAÇÃO — editar apenas este bloco para usar com qualquer dataset
 # =============================================================================
 
-INPUT_FILE     <- "rj.cat.csv"
+INPUT_FILE     <- "teste.cat.csv"
 
-SELECTED_COLS  <- c(
-  "ano", "mes", "NATUREZA", "GESTAO", "ZONA", "npartos", "sem.gest",
-  "n.consultas", "idade", "escolaridade", "apgar", "cesarea",
-  "tmn.geral", "tmn.pre", "tmn.tar"
-)
-# SELECTED_COLS <- NULL  # descomentar para usar TODAS as colunas
+SELECTED_COLS  <- NULL
+# SELECTED_COLS <- NULL  # descomente para usar TODAS as colunas
 
-RHS_TARGET     <- "tmn.geral=alto"   # formato: "coluna=valor"
+RHS_TARGET     <- "desfecho=grave"   
 
 APRIORI_SUPP   <- 0.1
-APRIORI_CONF   <- 0.8
-APRIORI_MINLEN <- 3
+APRIORI_CONF   <- 0.7
+APRIORI_MINLEN <- 2
 APRIORI_MAXLEN <- 4
 
 MIN_LIFT       <- 1
 MIN_COUNT      <- 1
 
-OUTPUT_FILE    <- "dataset.csv"
+OUTPUT_FILE    <- "dataset1.csv"
 # =============================================================================
 ```
 
@@ -126,7 +122,7 @@ if (length(rules) > 0) {
 ```
 
 ```{r save-output}
-out_path <- file.path(dirname(resolve_path(INPUT_FILE)), OUTPUT_FILE)
+out_path <- OUTPUT_FILE
 write.csv(dataset, file = out_path, row.names = FALSE)
 message(sprintf("Salvo em: %s (%d linhas)", out_path, nrow(dataset)))
 ```
