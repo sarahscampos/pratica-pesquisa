@@ -13,22 +13,23 @@ output: html_document
 # CONFIGURAÇÃO — editar apenas este bloco para usar com qualquer dataset
 # =============================================================================
 
-INPUT_FILE     <- "teste.cat.csv"
+INPUT_FILE     <- "teste3.cat.csv"
 
-SELECTED_COLS  <- NULL
-# SELECTED_COLS <- NULL  # descomente para usar TODAS as colunas
+SELECTED_COLS  <- NULL # descomentar para usar todas as colunas
 
 RHS_TARGET     <- "desfecho=grave"   
+RHS_ATTR      <- "desfecho"
+RHS_VALUE     <- "grave"
 
-APRIORI_SUPP   <- 0.1
-APRIORI_CONF   <- 0.7
+APRIORI_SUPP  <- 0.05
+APRIORI_CONF  <- 0.6
 APRIORI_MINLEN <- 2
-APRIORI_MAXLEN <- 4
+APRIORI_MAXLEN <- 3
 
 MIN_LIFT       <- 1
 MIN_COUNT      <- 1
 
-OUTPUT_FILE    <- "dataset1.csv"
+OUTPUT_FILE    <- "dataset3.csv"
 # =============================================================================
 ```
 
