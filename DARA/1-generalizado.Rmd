@@ -13,7 +13,7 @@ output: html_document
 # CONFIGURAÇÃO — editar apenas este bloco para usar com qualquer dataset
 # =============================================================================
 
-INPUT_FILE     <- "teste3.cat.csv"
+INPUT_FILE     <- "teste4.cat.csv"
 
 SELECTED_COLS  <- NULL # descomentar para usar todas as colunas
 
@@ -29,7 +29,7 @@ APRIORI_MAXLEN <- 3
 MIN_LIFT       <- 1
 MIN_COUNT      <- 1
 
-OUTPUT_FILE    <- "dataset3.csv"
+OUTPUT_FILE    <- "dataset4.csv"
 # =============================================================================
 ```
 

@@ -13,11 +13,11 @@ output: html_document
 # CONFIGURAÇÃO — editar apenas este bloco para usar com qualquer dataset
 # =============================================================================
 
-INPUT_FILE    <- "teste3.cat.csv"
+INPUT_FILE    <- "teste4.cat.csv"
 
 SELECTED_COLS <- NULL # descomentar para usar todas as colunas
 
-RULES_FILE    <- "dataset3.csv"
+RULES_FILE    <- "dataset4.csv"
 
 RHS_TARGET     <- "desfecho=grave"   
 RHS_ATTR      <- "desfecho"
