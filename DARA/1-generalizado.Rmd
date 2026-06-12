@@ -7,19 +7,46 @@ output: html_document
 title: "1-generate-rules"
 output: html_document
 ---
+```{r}
+
+files <- c(
+  "malaria_2016.RData",
+  "malaria_2017.RData",
+  "malaria_2018.RData",
+  "malaria_2019.RData"
+)
+
+datasets <- lapply(files, function(file){
+
+  objs <- load(
+    file.path("~/pratica-pesquisa/datasets", file)
+  )
+
+  get(objs[1])
+
+})
+
+malaria <- bind_rows(datasets)
+
+save(
+  malaria,
+  file = "malaria.RData"
+)
+```
+
 
 ```{r config}
 # =============================================================================
 # CONFIGURAÇÃO — editar apenas este bloco para usar com qualquer dataset
 # =============================================================================
 
-INPUT_FILE     <- "teste4.cat.csv"
+INPUT_FILE     <- "malaria.RData"
 
 SELECTED_COLS  <- NULL # descomentar para usar todas as colunas
 
-RHS_TARGET     <- "desfecho=grave"   
-RHS_ATTR      <- "desfecho"
-RHS_VALUE     <- "grave"
+RHS_TARGET     <- "exam.result=vivax"   
+RHS_ATTR      <- "exam.result"
+RHS_VALUE     <- "vivax"
 
 APRIORI_SUPP  <- 0.05
 APRIORI_CONF  <- 0.6
@@ -29,7 +56,7 @@ APRIORI_MAXLEN <- 3
 MIN_LIFT       <- 1
 MIN_COUNT      <- 1
 
-OUTPUT_FILE    <- "dataset4.csv"
+OUTPUT_FILE    <- "malaria-m.RData"
 # =============================================================================
 ```
 
@@ -52,7 +79,27 @@ rhs_column <- function(rhs_target) sub("=.*", "", rhs_target)
 ```
 
 ```{r load-data}
-raw <- read_csv(resolve_path(INPUT_FILE), show_col_types = FALSE)
+#raw <- read_csv(resolve_path(INPUT_FILE), show_col_types = FALSE)
+#load(resolve_path(INPUT_FILE))
+
+# Carrega arquivo .RData
+input_path <- resolve_path(INPUT_FILE)
+
+loaded_objects <- load(input_path)
+
+if (length(loaded_objects) == 0) {
+  stop("O arquivo .RData não contém nenhum objeto.")
+}
+
+# Usa o primeiro objeto carregado como dataset
+raw <- get(loaded_objects[1])
+
+if (!is.data.frame(raw)) {
+  stop(sprintf(
+    "O objeto carregado (%s) não é um data.frame.",
+    loaded_objects[1]
+  ))
+}
 
 if (!is.null(SELECTED_COLS)) {
   missing_cols <- setdiff(SELECTED_COLS, names(raw))
@@ -124,6 +171,19 @@ if (length(rules) > 0) {
 
 ```{r save-output}
 out_path <- OUTPUT_FILE
-write.csv(dataset, file = out_path, row.names = FALSE)
-message(sprintf("Salvo em: %s (%d linhas)", out_path, nrow(dataset)))
+#write.csv(dataset, file = out_path, row.names = FALSE)
+#save(dataset, file = out_path)
+
+save(
+  dataset,
+  file = out_path
+)
+
+message(sprintf(
+  "Arquivo RData salvo em: %s (%d linhas)",
+  out_path,
+  nrow(dataset)
+))
+
+#message(sprintf("Salvo em: %s (%d linhas)", out_path, nrow(dataset)))
 ```
