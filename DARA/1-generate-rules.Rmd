@@ -21,14 +21,35 @@ resolve_path <- function(fname) {
 }
 
 # Load categorized dataset
-rj_cat <- read_csv(resolve_path("rj.cat.csv"), show_col_types = FALSE)
+
+#malaria <- load_rdata(resolve_path("dataset.RData"))
+files <- c(
+  "malaria_2016.RData",
+  "malaria_2017.RData",
+  "malaria_2018.RData",
+  "malaria_2019.RData"
+)
+
+datasets <- lapply(files, function(file){
+
+  objs <- load(
+    file.path("~/pratica-pesquisa/datasets", file)
+  )
+
+  get(objs[1])
+
+})
+
+malaria <- bind_rows(datasets)
+
+save(
+  malaria,
+  file = "dataset.RData"
+)
+names(malaria)
 
 # Select attributes of interest
-data <- subset(rj_cat, select = c(
-  "ano","mes","NATUREZA","GESTAO","ZONA","npartos","sem.gest",
-  "n.consultas","idade","escolaridade","apgar","cesarea",
-  "tmn.geral","tmn.pre","tmn.tar"
-))
+data <- subset(malaria, select = c(names(malaria)) )
 
 # Transform to factors
 pf_data <- data.frame(lapply(data, as.factor))
@@ -37,7 +58,7 @@ pf_data <- data.frame(lapply(data, as.factor))
 rules <- apriori(
   pf_data,
   parameter = list(supp = 0.1, conf = 0.8, minlen = 3, maxlen = 4, target = "rules"),
-  appearance = list(rhs = "tmn.geral=alto"),
+  appearance = list(rhs = "exam.result=vivax"),
   control = list(verbose = FALSE)
 )
 
@@ -59,7 +80,7 @@ if (length(rules) > 0) {
   splitted <- str_split(dataset$rules, " => ", simplify = TRUE)
   dataset <- data.frame(
     lhs = splitted[, 1],
-    rhs = gsub("_", "=", gsub("tmn.geral=", "", splitted[, 2])),
+    rhs = gsub("_", "=", gsub("exam.result=", "", splitted[, 2])),
     support = dataset$support,
     confidence = dataset$confidence,
     lift = imrules$lift,
@@ -96,10 +117,21 @@ num_cols <- c("lift","count","confidence","support","kulc","ir")
 for (nc in num_cols) dataset[[nc]] <- as.numeric(dataset[[nc]])
 
 # Save to dara/dataset.csv
-out_path <- resolve_path("dataset.csv")
-write.csv(dataset, file = out_path, row.names = FALSE)
-message(sprintf("Saved rules dataset to %s", out_path))
+#out_path <- resolve_path("malaria.csv")
+#write.csv(dataset, file = out_path, row.names = FALSE)
+#message(sprintf("Saved rules dataset to %s", out_path))
 
+out_path <- "malaria-rules-lais.RData"
 
+save(
+  dataset,
+  file = out_path
+)
+
+message(sprintf(
+  "Arquivo de regras salvo em: %s (%d linhas)",
+  out_path,
+  nrow(dataset)
+))
 ```
 

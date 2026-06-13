@@ -17,7 +17,7 @@ INPUT_FILE    <- "malaria.RData"
 
 SELECTED_COLS <- NULL # descomentar para usar todas as colunas
 
-RULES_FILE    <- "malaria-m.RData"
+RULES_FILE    <- "malaria-rules-g5.RData"
 
 RHS_TARGET     <- "exam.result=vivax"   
 RHS_ATTR      <- "exam.result"

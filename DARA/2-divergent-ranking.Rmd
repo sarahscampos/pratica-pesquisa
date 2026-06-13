@@ -19,18 +19,37 @@ resolve_path <- function(fname) {
 }
 
 # Load data and rules dataset
-data <- read_csv(resolve_path("rj.cat.csv"), show_col_types = FALSE)
-rules_df <- read_csv(resolve_path("dataset.csv"), show_col_types = FALSE)
+#data <- read_csv(resolve_path("rj.cat.csv"), show_col_types = FALSE)
+#rules_df <- read_csv(resolve_path("dataset.csv"), show_col_types = FALSE)
+files <- c(
+  "malaria_2016.RData",
+  "malaria_2017.RData",
+  "malaria_2018.RData",
+  "malaria_2019.RData"
+)
+
+datasets <- lapply(files, function(file){
+
+  objs <- load(
+    file.path("~/pratica-pesquisa/datasets", file)
+  )
+
+  get(objs[1])
+
+})
+
+malaria <- bind_rows(datasets)
+
+save(
+  malaria,
+  file = "dataset.RData"
+)
 
 # Use the same attributes used to generate rules
-data <- subset(data, select = c(
-  "ano","mes","NATUREZA","GESTAO","ZONA","npartos","sem.gest",
-  "n.consultas","idade","escolaridade","apgar","cesarea",
-  "tmn.geral","tmn.pre","tmn.tar"
-))
+data <- subset(data, select = c(names(malaria)) )
 
 # Filter to RHS condition (tmn.geral == "alto") for the dataset side
-data <- subset(data, tmn.geral == "alto")
+data <- subset(data, exam.result == "vivax")
 
 # Remove the RHS attribute from the comparison set
 rhs_attr <- "tmn.geral"
