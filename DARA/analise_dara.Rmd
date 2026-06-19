@@ -4,382 +4,32 @@ output: html_document
 date: "2026-06-19"
 ---
 
-1-generalizado
-```{r setup DARA RData}
-files <- c(
-  "malaria_2016.RData",
-  "malaria_2017.RData",
-  "malaria_2018.RData",
-  "malaria_2019.RData"
-)
-
-datasets <- lapply(files, function(file){
-
-  objs <- load(
-    file.path("~/pratica-pesquisa/DARA/datasets-malaria", file)
-  )
-
-  get(objs[1])
-
-})
-
-malaria <- bind_rows(datasets)
-
-save(
-  malaria,
-  file = "dataset.RData"
-)
-```
-
-<!-- ```{r setup DARA csv} -->
-<!-- # Lendo o dataset e armazenando na variável "dados" -->
-<!-- dados <- read.csv("test3.cat.csv") -->
-<!-- # Salvando o objeto "dados" no formato .RData -->
-<!-- save(dados, file = "dataset.RData") -->
-<!-- ``` -->
-
-
-```{r config}
-# =============================================================================
-# CONFIGURAÇÃO — editar apenas este bloco para usar com qualquer dataset
-# =============================================================================
-
-INPUT_FILE     <- "dataset.RData"
-
-SELECTED_COLS  <- NULL # descomentar para usar todas as colunas
-
-RHS_TARGET     <- "exam.result=vivax"   
-RHS_ATTR      <- "exam.result"
-RHS_VALUE     <- "vivax"
-
-APRIORI_SUPP  <- 0.05
-APRIORI_CONF  <- 0.8
-APRIORI_MINLEN <- 3
-APRIORI_MAXLEN <- 4
-
-MIN_LIFT       <- 1
-MIN_COUNT      <- 1
-
-OUTPUT_FILE    <- "malaria-rules-g5.RData"
-```
-
-```{r setup, message=FALSE, warning=FALSE}
-suppressPackageStartupMessages({
-  library(arules)
-  library(arulesViz)
-  library(readr)
-  library(stringr)
-})
-
-resolve_path <- function(fname) {
-  if (file.exists(fname)) return(fname)
-  p <- file.path("dara", fname)
-  if (file.exists(p)) return(p)
-  stop(sprintf("Arquivo não encontrado: %s", fname))
-}
-
-rhs_column <- function(rhs_target) sub("=.*", "", rhs_target)
-```
-
-```{r load-data}
-#raw <- read_csv(resolve_path(INPUT_FILE), show_col_types = FALSE)
-#load(resolve_path(INPUT_FILE))
-
-# Carrega arquivo .RData
-input_path <- resolve_path(INPUT_FILE)
-
-loaded_objects <- load(input_path)
-
-if (length(loaded_objects) == 0) {
-  stop("O arquivo .RData não contém nenhum objeto.")
-}
-
-# Usa o primeiro objeto carregado como dataset
-raw <- get(loaded_objects[1])
-
-if (!is.data.frame(raw)) {
-  stop(sprintf(
-    "O objeto carregado (%s) não é um data.frame.",
-    loaded_objects[1]
-  ))
-}
-
-if (!is.null(SELECTED_COLS)) {
-  missing_cols <- setdiff(SELECTED_COLS, names(raw))
-  if (length(missing_cols) > 0)
-    stop(sprintf("Colunas não encontradas: %s", paste(missing_cols, collapse = ", ")))
-  data <- subset(raw, select = SELECTED_COLS)
-} else {
-  data <- raw
-}
-
-message(sprintf("Dataset carregado: %d linhas x %d colunas", nrow(data), ncol(data)))
-```
-
-```{r generate-rules}
-pf_data <- data.frame(lapply(data, as.factor))
-
-rules <- apriori(
-  pf_data,
-  parameter = list(supp = APRIORI_SUPP, conf = APRIORI_CONF,
-                   minlen = APRIORI_MINLEN, maxlen = APRIORI_MAXLEN, target = "rules"),
-  appearance = list(rhs = RHS_TARGET),
-  control    = list(verbose = FALSE)
-)
-message(sprintf("Regras geradas: %d", length(rules)))
-```
-
-```{r filter-rules}
-imrules <- interestMeasure(rules, transactions = pf_data)
-rules   <- rules[imrules$lift >= MIN_LIFT & imrules$count > MIN_COUNT]
-message(sprintf("Após filtro lift & count: %d", length(rules)))
-
-rules <- rules[!is.redundant(rules)]
-message(sprintf("Após remoção de redundâncias: %d", length(rules)))
-```
-
-```{r build-dataset}
-imrules <- interestMeasure(rules, transactions = pf_data)
-dataset <- as(rules, "data.frame")
-rhs_col <- rhs_column(RHS_TARGET)
-
-if (length(rules) > 0) {
-  splitted <- str_split(dataset$rules, " => ", simplify = TRUE)
-  dataset  <- data.frame(
-    lhs = splitted[, 1], rhs = gsub(paste0(rhs_col, "="), "", splitted[, 2]),
-    support = dataset$support, confidence = dataset$confidence,
-    lift = imrules$lift, count = imrules$count,
-    kulc = imrules$kulczynski, ir = imrules$imbalance,
-    stringsAsFactors = FALSE
-  )
-
-  for (col in c("lhs", "rhs")) dataset[[col]] <- gsub("[{}]", "", dataset[[col]])
-  for (nm in names(data)) dataset[[nm]] <- NA
-
-  lhs_items <- str_split(dataset$lhs, ",")
-  for (i in seq_along(lhs_items)) {
-    for (kv in lhs_items[[i]]) {
-      nv <- str_split(trimws(kv), "=", simplify = TRUE)
-      if (ncol(nv) == 2) {
-        col_name <- trimws(nv[1, 1])
-        if (col_name %in% names(dataset)) dataset[i, col_name] <- trimws(nv[1, 2])
-      }
-    }
-  }
-
-  for (nc in c("lift","count","confidence","support","kulc","ir"))
-    dataset[[nc]] <- as.numeric(dataset[[nc]])
-}
-```
-
-```{r save-output}
-out_path <- OUTPUT_FILE
-#write.csv(dataset, file = out_path, row.names = FALSE)
-#save(dataset, file = out_path)
-
-save(
-  dataset,
-  file = out_path
-)
-
-message(sprintf(
-  "Arquivo de regras salvo em: %s (%d linhas)",
-  out_path,
-  nrow(dataset)
-))
-
-#message(sprintf("Salvo em: %s (%d linhas)", out_path, nrow(dataset)))
-```
-
-1-generate-rules
-```{r bibs}
-suppressPackageStartupMessages({
-  library(arules)
-  library(arulesViz)
-  library(readr)
-  library(stringr)
-})
-```
-
-<!-- ```{r setup DARA csv} -->
-<!-- # Lendo o dataset e armazenando na variável "dados" -->
-<!-- dados <- read.csv("test3.cat.csv") -->
-<!-- # Salvando o objeto "dados" no formato .RData -->
-<!-- save(dados, file = "dataset.RData") -->
-<!-- ``` -->
-
-```{r setup DARA RData}
-# Load categorized dataset
-
-#malaria <- load_rdata(resolve_path("dataset.RData"))
-files <- c(
-  "malaria_2016.RData",
-  "malaria_2017.RData",
-  "malaria_2018.RData",
-  "malaria_2019.RData"
-)
-
-datasets <- lapply(files, function(file){
-
-  objs <- load(
-    file.path("~/pratica-pesquisa/DARA/datasets_lais", file)
-  )
-
-  get(objs[1])
-
-})
-
-malaria <- bind_rows(datasets)
-
-save(
-  malaria,
-  file = "dataset_lais.RData"
-)
-names(malaria)
-```
-
-```{r generate-rules}
-# Helper to resolve a file that may be in CWD or under dara/
-resolve_path <- function(fname) {
-  if (file.exists(fname)) return(fname)
-  p <- file.path("dara", fname)
-  if (file.exists(p)) return(p)
-  stop(sprintf("File not found: %s", fname))
-}
-
-# Select attributes of interest
-data <- subset(malaria, select = c(names(malaria)) )
-
-# Transform to factors
-pf_data <- data.frame(lapply(data, as.factor))
-
-# Generate association rules targeting tmn.geral=alto
-rules_lais <- apriori(
-  pf_data,
-  parameter = list(supp = 0.1, conf = 0.8, minlen = 3, maxlen = 4, target = "rules"),
-  appearance = list(rhs = "exam.result=vivax"),
-  control = list(verbose = FALSE)
-)
-
-message(sprintf("Number of rules: %d", length(rules_lais)))
-
-# Compute interest measures and filter
-imrules <- interestMeasure(rules_lais, transactions = data)
-rules_lais <- rules_lais[imrules$lift >= 1 & imrules$count > 1]
-message(sprintf("Number of rules (filtering lift & count): %d", length(rules_lais)))
-rules_lais <- rules_lais[!is.redundant(rules_lais)]
-message(sprintf("Number of rules (after redundancy filter): %d", length(rules_lais)))
-
-# Convert to data.frame with interest measures
-imrules <- interestMeasure(rules_lais, transactions = data)
-dataset_lais <- as(rules_lais, "data.frame")
-df_regras <- as(rules_lais, "data.frame")
-
-# FORÇA O RESET DOS ÍNDICES (corrige o desalinhamento do split)
-rownames(dataset_lais) <- NULL
-
-if (length(rules_lais) > 0) {
-  # Divide a coluna 'rules' em duas colunas sem depender de rownames
-  splitted <- str_split(df_regras$rules, " => ", simplify = TRUE)
-  
-  # Split lhs/rhs and normalize RHS label for downstream matching
-  splitted <- str_split(dataset_lais$rules, " => ", simplify = TRUE)
-  dataset_lais <- data.frame(
-    lhs = splitted[, 1],
-    rhs = gsub("_", "=", gsub("exam.result=", "", splitted[, 2])),
-    support = dataset_lais$support,
-    confidence = dataset_lais$confidence,
-    lift = imrules$lift,
-    count = imrules$count,
-    kulc = imrules$kulczynski,
-    ir = imrules$imbalance,
-    stringsAsFactors = FALSE
-  )
-}
-
-# Clean braces
-dataset_lais$rhs <- gsub("\\{", "", dataset_lais$rhs)
-dataset_lais$rhs <- gsub("\\}", "", dataset_lais$rhs)
-dataset_lais$lhs <- gsub("\\{", "", dataset_lais$lhs)
-dataset_lais$lhs <- gsub("\\}", "", dataset_lais$lhs)
-
-# Recreate original attribute columns present in data for easier joins later
-for (nm in names(data)) dataset_lais[[nm]] <- NA
-
-# Fill attribute columns according to LHS items
-lhs_items <- str_split(dataset_lais$lhs, ",")
-for (i in seq_along(lhs_items)) {
-  kvs <- lhs_items[[i]]
-  for (kv in kvs) {
-    nv <- str_split(kv, "=", simplify = TRUE)
-    if (ncol(nv) == 2) {
-      dataset_lais[i, trimws(nv[1, 1])] <- trimws(nv[1, 2])
-    }
-  }
-}
-
-# Convert interest measures to numeric explicitly
-num_cols <- c("lift","count","confidence","support","kulc","ir")
-for (nc in num_cols) dataset_lais[[nc]] <- as.numeric(dataset_lais[[nc]])
-
-# Save to dara/dataset.csv
-#out_path <- resolve_path("malaria.csv")
-#write.csv(dataset, file = out_path, row.names = FALSE)
-#message(sprintf("Saved rules dataset to %s", out_path))
-
-out_path <- "malaria-rules-lais.RData"
-
-save(
-  dataset_lais,
-  file = out_path
-)
-
-message(sprintf(
-  "Arquivo de regras salvo em: %s (%d linhas)",
-  out_path,
-  nrow(dataset_lais)
-))
-```
-
 ## Including Plots
 
-You can also embed plots, for example:
 ```{r}
 library(ggplot2)
 library(dplyr)
 library(scales)
 library(skimr)
+library(readr)
+library(stringr)
 ```
 
-<!-- ```{r grafico-qtd_regras-dts_sistetico} -->
-<!-- # Plotagem do gráfico de evolução temporal dos tipos de malária -->
-<!-- # 1. Criar um data frame estruturado com os dados -->
-<!-- df_plot <- data.frame( -->
-<!--   Arquivo = c("generate-rules.Rmd", "1-generalizado.Rmd"), -->
-<!--   Num_Regras = c(nrow(dataset_lais), nrow(dataset)) -->
-<!-- ) -->
-
-<!-- # 2. Plotar o gráfico usando geom_col -->
-<!-- ggplot(df_plot, aes(x = Arquivo, y = Num_Regras, fill = Arquivo)) + -->
-<!--   geom_col(show.legend = FALSE) + -->
-<!--   theme_minimal() + -->
-<!--   labs( -->
-<!--     title = "Distribuição dos resultados em geração de regras (dts teste3.cat.csv)", -->
-<!--     x = "Arquivo", -->
-<!--     y = "Número de regras" -->
-<!--   ) +  -->
-<!--   theme( -->
-<!--     plot.title = element_text(hjust = 0.5, face = "bold") -->
-<!--   ) -->
-<!-- ``` -->
-
-
-```{r grafico-qtd_regras-dts_malaria}
-# Plotagem do gráfico de evolução temporal dos tipos de malária
-# 1. Criar um data frame estruturado com os dados
+```{r grafico-qtd_regras-dts malaria}
+#RHS_TARGET     <- "exam.result=vivax"   
+#RHS_ATTR      <- "exam.result"
+#RHS_VALUE     <- "vivax"
+#APRIORI_SUPP  <- 0.05
+#APRIORI_CONF  <- 0.8
+#APRIORI_MINLEN <- 3
+#APRIORI_MAXLEN <- 4
+#MIN_LIFT       <- 1
+#MIN_COUNT      <- 1
+# datasets "malaria-rules-g5.RData" e "malaria-rules-lais.RData"
+# 1. Cria um data frame estruturado com os dados
 df_plot <- data.frame(
-  Arquivo = c("generate-rules.Rmd", "1-generalizado.Rmd"),
-  Num_Regras = c(nrow(dataset_lais), nrow(dataset))
+  Arquivo = c("1-generalizado.Rmd", "1-generate-rules.Rmd"),
+  Num_Regras = c(nrow(dataset), nrow(dataset_lais))
 )
 
 # 2. Plotar o gráfico usando geom_col
@@ -395,5 +45,45 @@ ggplot(df_plot, aes(x = Arquivo, y = Num_Regras, fill = Arquivo)) +
     plot.title = element_text(hjust = 0.5, face = "bold")
   )
 ```
+
+<!-- ```{r} -->
+<!-- setwd("~/pratica-pesquisa/DARA/datasets-T2") -->
+<!-- # Lendo o dataset e armazenando na variável "dados" -->
+<!-- dados1 <- read.csv("teste3.cat.csv") -->
+<!-- # Salvando o objeto "dados" no formato .RData -->
+<!-- save(dados, file = "teste3.cat.RData") -->
+
+<!-- dados2 <- read.csv("teste4.cat.csv") -->
+<!-- save(dados, file = "teste4.cat.RData") -->
+<!-- ``` -->
+
+
+```{r grafico-qtd_regras-dts sintético}
+# Dataset teste3.cat.csv 
+#mesma configuração de variáveis 
+print(load("sintetico-rules-lais.RData"))
+df_plot <- data.frame(
+  Arquivo = c("1-generalizado.Rmd", "1-generate-rules.Rmd"),
+  Num_Regras = c(nrow(out_path), nrow(OUTPUT_FILE))
+)
+
+ggplot(df_plot, aes(x = Arquivo, y = Num_Regras, fill = Arquivo)) +
+  geom_col(show.legend = FALSE) +
+  theme_minimal() +
+  labs(
+    title = "Distribuição dos resultados em geração de regras (dts teste3.cat.RData)",
+    x = "Arquivo",
+    y = "Número de regras"
+  ) + 
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  )
+```
+# Datasets teste4.cat.csv 
+```{r}
+
+```
+
+
 
 
