@@ -1,89 +1,52 @@
 ---
-title: "analise_dara"
+title: "DARA — Comparação entre abordagens de geração de regras"
 output: html_document
-date: "2026-06-19"
 ---
 
-## Including Plots
+> Compara o número de regras produzidas por diferentes abordagens/parâmetros.
+> A versão antiga referenciava objetos nunca definidos (`dataset_lais`, `out_path`,
+> `OUTPUT_FILE`) e carregava um arquivo inexistente. Aqui lemos diretamente os
+> `.RData` de regras já gerados.
 
-```{r}
+```{r setup, message=FALSE, warning=FALSE}
 library(ggplot2)
 library(dplyr)
-library(scales)
-library(skimr)
-library(readr)
-library(stringr)
 ```
 
-```{r grafico-qtd_regras-dts malaria}
-#RHS_TARGET     <- "exam.result=vivax"   
-#RHS_ATTR      <- "exam.result"
-#RHS_VALUE     <- "vivax"
-#APRIORI_SUPP  <- 0.05
-#APRIORI_CONF  <- 0.8
-#APRIORI_MINLEN <- 3
-#APRIORI_MAXLEN <- 4
-#MIN_LIFT       <- 1
-#MIN_COUNT      <- 1
-# datasets "malaria-rules-g5.RData" e "malaria-rules-lais.RData"
-# 1. Cria um data frame estruturado com os dados
-df_plot <- data.frame(
-  Arquivo = c("1-generalizado.Rmd", "1-generate-rules.Rmd"),
-  Num_Regras = c(nrow(dataset), nrow(dataset_lais))
+```{r config}
+# Arquivos de regras a comparar: rótulo -> caminho .RData (cada um contém `dataset`)
+ARQUIVOS_REGRAS <- c(
+  "1-generate-rules (g5)"  = "malaria-rules-g5.RData",
+  "1-generate-rules (lais)" = "malaria-rules-lais.RData"
 )
+```
 
-# 2. Plotar o gráfico usando geom_col
-ggplot(df_plot, aes(x = Arquivo, y = Num_Regras, fill = Arquivo)) +
+```{r contar-regras}
+# Lê cada .RData em ambiente isolado e conta as linhas do objeto de regras.
+contar_regras <- function(caminho) {
+  if (!file.exists(caminho)) {
+    warning(sprintf("Arquivo não encontrado, ignorando: %s", caminho))
+    return(NA_integer_)
+  }
+  e <- new.env()
+  objs <- load(caminho, envir = e)
+  nrow(get(objs[1], envir = e))
+}
+
+df_plot <- tibble(
+  Abordagem  = names(ARQUIVOS_REGRAS),
+  Num_Regras = vapply(ARQUIVOS_REGRAS, contar_regras, integer(1))
+) %>% filter(!is.na(Num_Regras))
+
+df_plot
+```
+
+```{r grafico}
+ggplot(df_plot, aes(Abordagem, Num_Regras, fill = Abordagem)) +
   geom_col(show.legend = FALSE) +
+  geom_text(aes(label = Num_Regras), vjust = -0.4) +
+  labs(title = "Número de regras por abordagem (dataset de malária)",
+       x = "Abordagem", y = "Número de regras") +
   theme_minimal() +
-  labs(
-    title = "Distribuição dos resultados em geração de regras (dts dataset.RData)",
-    x = "Arquivo",
-    y = "Número de regras"
-  ) + 
-  theme(
-    plot.title = element_text(hjust = 0.5, face = "bold")
-  )
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
 ```
-
-<!-- ```{r} -->
-<!-- setwd("~/pratica-pesquisa/DARA/datasets-T2") -->
-<!-- # Lendo o dataset e armazenando na variável "dados" -->
-<!-- dados1 <- read.csv("teste3.cat.csv") -->
-<!-- # Salvando o objeto "dados" no formato .RData -->
-<!-- save(dados, file = "teste3.cat.RData") -->
-
-<!-- dados2 <- read.csv("teste4.cat.csv") -->
-<!-- save(dados, file = "teste4.cat.RData") -->
-<!-- ``` -->
-
-
-```{r grafico-qtd_regras-dts sintético}
-# Dataset teste3.cat.csv 
-#mesma configuração de variáveis 
-print(load("sintetico-rules-lais.RData"))
-df_plot <- data.frame(
-  Arquivo = c("1-generalizado.Rmd", "1-generate-rules.Rmd"),
-  Num_Regras = c(nrow(out_path), nrow(OUTPUT_FILE))
-)
-
-ggplot(df_plot, aes(x = Arquivo, y = Num_Regras, fill = Arquivo)) +
-  geom_col(show.legend = FALSE) +
-  theme_minimal() +
-  labs(
-    title = "Distribuição dos resultados em geração de regras (dts teste3.cat.RData)",
-    x = "Arquivo",
-    y = "Número de regras"
-  ) + 
-  theme(
-    plot.title = element_text(hjust = 0.5, face = "bold")
-  )
-```
-# Datasets teste4.cat.csv 
-```{r}
-
-```
-
-
-
-

@@ -1,137 +1,143 @@
 ---
-title: "1-generate-rules"
+title: "DARA — 1. Geração de regras de associação"
 output: html_document
 ---
 
-```{r}
+> Etapa 1 do pipeline DARA. Lê os datasets anuais de malária, gera regras de
+> associação (Apriori) com alvo no RHS, filtra por medidas de interesse e
+> redundância, e salva: (a) o dataset unificado e (b) a tabela de regras.
+>
+> Esta versão substitui `1-generalizado.Rmd` (foram unificados).
 
-suppressPackageStartupMessages({
-  library(arules)
-  library(arulesViz)
-  library(readr)
-  library(stringr)
-})
+```{r config}
+# =============================================================================
+# CONFIGURAÇÃO — editar apenas este bloco para usar com qualquer dataset
+# =============================================================================
+DATASETS_DIR  <- "datasets-malaria"            # relativo a este .Rmd
+INPUT_FILES   <- sprintf("malaria_%d.RData", 2016:2019)
 
-# Helper to resolve a file that may be in CWD or under dara/
-resolve_path <- function(fname) {
-  if (file.exists(fname)) return(fname)
-  p <- file.path("dara", fname)
-  if (file.exists(p)) return(p)
-  stop(sprintf("File not found: %s", fname))
-}
+DATA_OUTPUT   <- "dataset.RData"               # dataset unificado (entrada da etapa 2)
+RULES_OUTPUT  <- "malaria-rules-g5.RData"      # tabela de regras (entrada da etapa 2)
 
-# Load categorized dataset
+SELECTED_COLS <- NULL                          # NULL = todas as colunas
 
-#malaria <- load_rdata(resolve_path("dataset.RData"))
-files <- c(
-  "malaria_2016.RData",
-  "malaria_2017.RData",
-  "malaria_2018.RData",
-  "malaria_2019.RData"
-)
+RHS_TARGET     <- "exam.result=vivax"          # consequente alvo
+APRIORI_SUPP   <- 0.05
+APRIORI_CONF   <- 0.80
+APRIORI_MINLEN <- 3
+APRIORI_MAXLEN <- 4
 
-datasets <- lapply(files, function(file){
-
-  objs <- load(
-    file.path("~/pratica-pesquisa/datasets", file)
-  )
-
-  get(objs[1])
-
-})
-
-malaria <- bind_rows(datasets)
-
-save(
-  malaria,
-  file = "dataset.RData"
-)
-names(malaria)
-
-# Select attributes of interest
-data <- subset(malaria, select = c(names(malaria)) )
-
-# Transform to factors
-pf_data <- data.frame(lapply(data, as.factor))
-
-# Generate association rules targeting tmn.geral=alto
-rules <- apriori(
-  pf_data,
-  parameter = list(supp = 0.1, conf = 0.8, minlen = 3, maxlen = 4, target = "rules"),
-  appearance = list(rhs = "exam.result=vivax"),
-  control = list(verbose = FALSE)
-)
-
-message(sprintf("Number of rules: %d", length(rules)))
-
-# Compute interest measures and filter
-imrules <- interestMeasure(rules, transactions = data)
-rules <- rules[imrules$lift >= 1 & imrules$count > 1]
-message(sprintf("Number of rules (filtering lift & count): %d", length(rules)))
-rules <- rules[!is.redundant(rules)]
-message(sprintf("Number of rules (after redundancy filter): %d", length(rules)))
-
-# Convert to data.frame with interest measures
-imrules <- interestMeasure(rules, transactions = data)
-dataset <- as(rules, "data.frame")
-
-if (length(rules) > 0) {
-  # Split lhs/rhs and normalize RHS label for downstream matching
-  splitted <- str_split(dataset$rules, " => ", simplify = TRUE)
-  dataset <- data.frame(
-    lhs = splitted[, 1],
-    rhs = gsub("_", "=", gsub("exam.result=", "", splitted[, 2])),
-    support = dataset$support,
-    confidence = dataset$confidence,
-    lift = imrules$lift,
-    count = imrules$count,
-    kulc = imrules$kulczynski,
-    ir = imrules$imbalance,
-    stringsAsFactors = FALSE
-  )
-}
-
-# Clean braces
-dataset$rhs <- gsub("\\{", "", dataset$rhs)
-dataset$rhs <- gsub("\\}", "", dataset$rhs)
-dataset$lhs <- gsub("\\{", "", dataset$lhs)
-dataset$lhs <- gsub("\\}", "", dataset$lhs)
-
-# Recreate original attribute columns present in data for easier joins later
-for (nm in names(data)) dataset[[nm]] <- NA
-
-# Fill attribute columns according to LHS items
-lhs_items <- str_split(dataset$lhs, ",")
-for (i in seq_along(lhs_items)) {
-  kvs <- lhs_items[[i]]
-  for (kv in kvs) {
-    nv <- str_split(kv, "=", simplify = TRUE)
-    if (ncol(nv) == 2) {
-      dataset[i, trimws(nv[1, 1])] <- trimws(nv[1, 2])
-    }
-  }
-}
-
-# Convert interest measures to numeric explicitly
-num_cols <- c("lift","count","confidence","support","kulc","ir")
-for (nc in num_cols) dataset[[nc]] <- as.numeric(dataset[[nc]])
-
-# Save to dara/dataset.csv
-#out_path <- resolve_path("malaria.csv")
-#write.csv(dataset, file = out_path, row.names = FALSE)
-#message(sprintf("Saved rules dataset to %s", out_path))
-
-out_path <- "malaria-rules-lais.RData"
-
-save(
-  dataset,
-  file = out_path
-)
-
-message(sprintf(
-  "Arquivo de regras salvo em: %s (%d linhas)",
-  out_path,
-  nrow(dataset)
-))
+MIN_LIFT       <- 1
+MIN_COUNT      <- 1
+# =============================================================================
 ```
 
+```{r setup, message=FALSE, warning=FALSE}
+library(arules)
+library(arulesViz)
+library(dplyr)     # bind_rows
+library(stringr)
+
+# Coluna do RHS a partir do alvo "coluna=valor"
+rhs_column <- function(rhs_target) sub("=.*", "", rhs_target)
+```
+
+```{r load-data}
+# Cada .RData expõe o objeto `data`; carregamos em ambiente isolado e empilhamos.
+ler_rdata <- function(caminho) {
+  if (!file.exists(caminho)) stop(sprintf("Arquivo não encontrado: %s", caminho))
+  e <- new.env()
+  objs <- load(caminho, envir = e)
+  get(objs[1], envir = e)
+}
+
+malaria <- INPUT_FILES %>%
+  file.path(DATASETS_DIR, .) %>%
+  lapply(ler_rdata) %>%
+  bind_rows()
+
+# Salva o dataset unificado para a etapa 2.
+save(malaria, file = DATA_OUTPUT)
+
+data <- if (is.null(SELECTED_COLS)) malaria else {
+  faltando <- setdiff(SELECTED_COLS, names(malaria))
+  if (length(faltando)) stop(sprintf("Colunas não encontradas: %s",
+                                      paste(faltando, collapse = ", ")))
+  subset(malaria, select = SELECTED_COLS)
+}
+
+message(sprintf("Dataset: %d linhas x %d colunas", nrow(data), ncol(data)))
+```
+
+```{r generate-rules}
+# arules exige todas as colunas como fator.
+pf_data <- data.frame(lapply(data, as.factor))
+
+rules <- apriori(
+  pf_data,
+  parameter  = list(supp = APRIORI_SUPP, conf = APRIORI_CONF,
+                    minlen = APRIORI_MINLEN, maxlen = APRIORI_MAXLEN,
+                    target = "rules"),
+  appearance = list(rhs = RHS_TARGET),
+  control    = list(verbose = FALSE)
+)
+message(sprintf("Regras geradas: %d", length(rules)))
+```
+
+```{r filter-rules}
+# Medidas de interesse calculadas sobre os MESMOS dados fatorizados (pf_data).
+im    <- interestMeasure(rules, transactions = pf_data)
+rules <- rules[im$lift >= MIN_LIFT & im$count > MIN_COUNT]
+message(sprintf("Após filtro lift & count: %d", length(rules)))
+
+rules <- rules[!is.redundant(rules)]
+message(sprintf("Após remoção de redundâncias: %d", length(rules)))
+```
+
+```{r build-dataset}
+# Constrói uma tabela "tidy": uma linha por regra + colunas dos atributos do LHS.
+im      <- interestMeasure(rules, transactions = pf_data)
+dataset <- as(rules, "data.frame")
+rhs_col <- rhs_column(RHS_TARGET)
+
+if (length(rules) > 0) {
+  partes  <- str_split(dataset$rules, " => ", simplify = TRUE)
+  dataset <- data.frame(
+    lhs        = partes[, 1],
+    rhs        = gsub(paste0(rhs_col, "="), "", partes[, 2]),
+    support    = dataset$support,
+    confidence = dataset$confidence,
+    lift       = im$lift,
+    count      = im$count,
+    kulc       = im$kulczynski,
+    ir         = im$imbalance,
+    stringsAsFactors = FALSE
+  )
+
+  # Remove chaves { } de lhs/rhs
+  for (col in c("lhs", "rhs")) dataset[[col]] <- gsub("[{}]", "", dataset[[col]])
+
+  # Recria colunas dos atributos originais (facilita joins na etapa 2)
+  for (nm in names(data)) dataset[[nm]] <- NA
+
+  # Preenche cada coluna com o valor presente no LHS daquela regra
+  itens_lhs <- str_split(dataset$lhs, ",")
+  for (i in seq_along(itens_lhs)) {
+    for (kv in itens_lhs[[i]]) {
+      nv <- str_split(trimws(kv), "=", simplify = TRUE)
+      if (ncol(nv) == 2) {
+        col_name <- trimws(nv[1, 1])
+        if (col_name %in% names(dataset)) dataset[i, col_name] <- trimws(nv[1, 2])
+      }
+    }
+  }
+
+  for (nc in c("lift", "count", "confidence", "support", "kulc", "ir"))
+    dataset[[nc]] <- as.numeric(dataset[[nc]])
+}
+```
+
+```{r save-output}
+save(dataset, file = RULES_OUTPUT)
+message(sprintf("Regras salvas em: %s (%d linhas)", RULES_OUTPUT, nrow(dataset)))
+```

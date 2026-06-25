@@ -61,8 +61,6 @@ glimpse(malaria)
 malaria <- malaria %>% select(all_of(COLS))
 
 # arules trabalha com transações: TODAS as colunas precisam ser fator.
-# (Conflito de merge resolvido: a tipagem numérica de mês/ano é útil só para
-#  EDA; para mineração convertemos tudo para fator.)
 malaria <- malaria %>% mutate(across(everything(), as.factor))
 glimpse(malaria)
 ```

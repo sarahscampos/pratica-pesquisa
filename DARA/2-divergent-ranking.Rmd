@@ -1,103 +1,113 @@
 ---
-title: "2-divergent-ranking"
+title: "DARA — 2. Ranking divergente"
 output: html_document
 ---
 
-```{r}
+> Etapa 2 do pipeline DARA. Compara, para cada atributo, a ordenação das
+> frequências de valores no **dataset** (restrito ao alvo) contra a ordenação no
+> conjunto de **regras** geradas na etapa 1, destacando os rankings divergentes.
+>
+> Esta versão substitui `2-generalizado.Rmd` (foram unificados) e corrige a
+> versão antiga, que referenciava objetos (`data`, `rules_df`) nunca carregados.
 
-suppressPackageStartupMessages({
-  library(readr)
-  library(dplyr)
-})
+```{r config}
+# =============================================================================
+# CONFIGURAÇÃO — deve casar com as saídas da etapa 1
+# =============================================================================
+INPUT_FILE    <- "dataset.RData"            # dataset unificado salvo na etapa 1
+RULES_FILE    <- "malaria-rules-g5.RData"   # tabela de regras salva na etapa 1
 
-# Helper to resolve a file that may be in CWD or under dara/
-resolve_path <- function(fname) {
-  if (file.exists(fname)) return(fname)
-  p <- file.path("dara", fname)
-  if (file.exists(p)) return(p)
-  stop(sprintf("File not found: %s", fname))
+SELECTED_COLS <- NULL                        # NULL = todas as colunas
+
+RHS_ATTR      <- "exam.result"               # atributo do consequente
+RHS_VALUE     <- "vivax"                      # valor alvo
+# =============================================================================
+```
+
+```{r setup, message=FALSE, warning=FALSE}
+library(dplyr)
+
+# Carrega um .RData garantindo que o objeto seja um data.frame.
+load_rdata <- function(file) {
+  if (!file.exists(file)) stop(sprintf("Arquivo não encontrado: %s", file))
+  e <- new.env()
+  objs <- load(file, envir = e)
+  if (length(objs) == 0) stop(sprintf("Nenhum objeto em %s", file))
+  obj <- get(objs[1], envir = e)
+  if (!is.data.frame(obj))
+    stop(sprintf("O objeto '%s' em %s não é um data.frame", objs[1], file))
+  obj
+}
+```
+
+```{r load-data}
+raw      <- load_rdata(INPUT_FILE)
+rules_df <- load_rdata(RULES_FILE)
+
+data <- if (is.null(SELECTED_COLS)) raw else {
+  faltando <- setdiff(SELECTED_COLS, names(raw))
+  if (length(faltando)) stop(sprintf("Colunas não encontradas: %s",
+                                      paste(faltando, collapse = ", ")))
+  subset(raw, select = SELECTED_COLS)
 }
 
-# Load data and rules dataset
-#data <- read_csv(resolve_path("rj.cat.csv"), show_col_types = FALSE)
-#rules_df <- read_csv(resolve_path("dataset.csv"), show_col_types = FALSE)
-files <- c(
-  "malaria_2016.RData",
-  "malaria_2017.RData",
-  "malaria_2018.RData",
-  "malaria_2019.RData"
-)
+if (!(RHS_ATTR %in% names(data)))
+  stop(sprintf("Atributo RHS '%s' não encontrado no dataset.", RHS_ATTR))
 
-datasets <- lapply(files, function(file){
+message(sprintf("Dataset: %d linhas x %d colunas | Regras: %d",
+                nrow(data), ncol(data), nrow(rules_df)))
+```
 
-  objs <- load(
-    file.path("~/pratica-pesquisa/datasets", file)
-  )
+```{r filter-and-clean}
+# Restringe o dataset ao valor alvo do RHS e remove o próprio atributo do RHS.
+data <- data[data[[RHS_ATTR]] == RHS_VALUE, ]
+message(sprintf("Linhas após filtro '%s == %s': %d", RHS_ATTR, RHS_VALUE, nrow(data)))
+data[[RHS_ATTR]] <- NULL
+```
 
-  get(objs[1])
-
-})
-
-malaria <- bind_rows(datasets)
-
-save(
-  malaria,
-  file = "dataset.RData"
-)
-
-# Use the same attributes used to generate rules
-data <- subset(data, select = c(names(malaria)) )
-
-# Filter to RHS condition (tmn.geral == "alto") for the dataset side
-data <- subset(data, exam.result == "vivax")
-
-# Remove the RHS attribute from the comparison set
-rhs_attr <- "tmn.geral"
-if (rhs_attr %in% names(data)) data[[rhs_attr]] <- NULL
+```{r divergent-ranking}
+# Para cada atributo, conta o nº de inversões entre a ordem de frequência no
+# dataset e a ordem no conjunto de regras. `c` acumula o "score" de divergência.
+# n = nº de valores distintos do atributo (pequeno), logo o laço duplo é barato.
+contar_divergencia <- function(merged) {
+  n <- nrow(merged)
+  merged$c <- 0L
+  if (n > 1) {
+    for (j in 1:(n - 1)) for (k in (j + 1):n) {
+      ds_j <- merged$dataset[j]; ds_k <- merged$dataset[k]
+      ru_j <- merged$rules[j];   ru_k <- merged$rules[k]
+      if (ds_j > ds_k && ru_j < ru_k) {
+        merged$c[j] <- merged$c[j] - 1L; merged$c[k] <- merged$c[k] + 1L
+      } else if (ds_j < ds_k && ru_j > ru_k) {
+        merged$c[j] <- merged$c[j] + 1L; merged$c[k] <- merged$c[k] - 1L
+      }
+    }
+  }
+  merged[order(merged$c), ]
+}
 
 results <- list()
 
 for (atributo in colnames(data)) {
-  # Frequency table in the dataset (restricted to RHS condition)
-  t_dataset <- table(data[[atributo]])
-
-  # Frequency table in the rules dataset (count of rules having that value on LHS)
   if (!(atributo %in% colnames(rules_df))) next
-  t_rules <- table(rules_df[[atributo]])
+
+  t_dataset <- table(data[[atributo]])
+  t_rules   <- table(rules_df[[atributo]])
   if (length(t_rules) == 0) next
 
-  # Align into a single frame
-  df_dataset <- as.data.frame(t_dataset)
-  df_rules <- as.data.frame(t_rules)
-  names(df_dataset) <- c("value","dataset")
-  names(df_rules) <- c("value","rules")
+  df_dataset <- as.data.frame(t_dataset, stringsAsFactors = FALSE)
+  df_rules   <- as.data.frame(t_rules,   stringsAsFactors = FALSE)
+  names(df_dataset) <- c("value", "dataset")
+  names(df_rules)   <- c("value", "rules")
+
   merged <- merge(df_dataset, df_rules, by = "value", all.x = TRUE)
   merged$rules[is.na(merged$rules)] <- 0
 
-  # Divergence counter c
-  merged$c <- 0
-  n <- nrow(merged)
-  if (n > 1) {
-    for (j in 1:(n - 1)) {
-      for (k in (j + 1):n) {
-        if ((merged$dataset[j] > merged$dataset[k]) && (merged$rules[j] < merged$rules[k])) {
-          merged$c[j] <- merged$c[j] - 1
-          merged$c[k] <- merged$c[k] + 1
-        } else if ((merged$dataset[j] < merged$dataset[k]) && (merged$rules[j] > merged$rules[k])) {
-          merged$c[j] <- merged$c[j] + 1
-          merged$c[k] <- merged$c[k] - 1
-        }
-      }
-    }
-  }
-
-  # Order by c and store
-  merged <- merged[order(merged$c), ]
+  merged <- contar_divergencia(merged)
   results[[atributo]] <- merged
-  print(sprintf("Processed attribute: %s", atributo))
+  message(sprintf("Atributo processado: %s", atributo))
   print(merged)
 }
 
-
+message(sprintf("Total de atributos processados: %d", length(results)))
 ```
-
