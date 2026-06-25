@@ -1,176 +1,96 @@
 ---
-title: "R Notebook"
+title: "Mineração de Padrões — Regras de associação em malária"
 output: html_notebook
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+Notebook de mineração de padrões sobre os dados de malária (2016–2019),
+usando o algoritmo **Apriori** (pacote `arules`).
 
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+## Como o Apriori funciona (referência conceitual)
 
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+O Apriori encontra itemsets frequentes e deles deriva regras de associação:
 
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+1. Varredura única para obter os 1-itemsets frequentes (acima do suporte mínimo).
+2. Geração de candidatos de tamanho *(k+1)* a partir dos frequentes de tamanho *k*,
+   com **poda**: descarta candidatos que tenham qualquer subconjunto infrequente.
+3. Teste dos candidatos contra a base, contando o suporte de cada um.
+4. Encerramento quando nenhum itemset frequente novo pode ser gerado.
 
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+> O bloco de "pseudocódigo SQL" que existia aqui antes não era R válido e foi
+> convertido nesta explicação. A implementação real usa `arules::apriori`.
 
-```{r}
-
-
-# Apriori
-# Varredura única para obter conjunto de 1-itens frequentes
-
-#Gerar conjuntos candidatos de tamanho (k+1) a partir dos frequentes de tamanho k
-
-# Testar os candidatos comparando com o banco de dados
-
-# Encerrar quando nenhum conjunto frequente ou candidato puder ser gerado
+```{r install, eval=FALSE}
+# Execute UMA vez por máquina (eval=FALSE: não roda no knit).
+pacotes <- c("tidyverse", "lubridate", "arules")
+install.packages(setdiff(pacotes, rownames(installed.packages())))
 ```
 
-```{r}
-install.packages(c("tidyverse", "lubridate","arules"))
-
+```{r setup, message=FALSE, warning=FALSE}
 library(tidyverse)
 library(lubridate)
 library(arules)
-
 ```
 
+```{r config}
+DATA_DIR <- "datasets"          # pasta com malaria_201X.RData
+ANOS     <- 2016:2019
 
-```{r}
-load("datasets/malaria_2016.RData")
-malaria_2016 <- data
-
-load("datasets/malaria_2017.RData")
-malaria_2017 <- data
-
-load("datasets/malaria_2018.RData")
-malaria_2018 <- data
-
-load("datasets/malaria_2019.RData")
-malaria_2019 <- data
-
-ls()
-
+# Colunas usadas na mineração
+COLS <- c("exam.interval", "treatment.interval", "notification.interval",
+          "notification.month", "notification.year", "migration",
+          "autochthonous.case", "exam.result", "detection.type", "exam.type",
+          "symptom", "hemiparasite", "previous.treatment", "occupation",
+          "education.level", "age", "race", "gender")
 ```
-```{r}
-#junção de dts
-malaria <- bind_rows(
-  malaria_2016,
-  malaria_2017,
-  malaria_2018,
-  malaria_2019
-)
-```
-```{r}
+
+```{r load-data}
+ler_ano <- function(ano) {
+  caminho <- file.path(DATA_DIR, sprintf("malaria_%d.RData", ano))
+  if (!file.exists(caminho)) stop(sprintf("Arquivo não encontrado: %s", caminho))
+  e <- new.env()
+  load(caminho, envir = e)
+  get("data", envir = e)
+}
+
+malaria <- map_dfr(ANOS, ler_ano)
 glimpse(malaria)
 ```
 
-```{r}
-#filtragem cols usadas
-malaria <- malaria %>%
-  select(
-    exam.interval,
-    treatment.interval,
-    notification.interval,
-    notification.month,
-    notification.year,
-    migration,
-    autochthonous.case,
-    exam.result,
-    detection.type,
-    exam.type,
-    symptom,
-    hemiparasite,
-    previous.treatment,
-    occupation,
-    education.level,
-    age,
-    race,
-    gender
-  )
-```
+```{r prepare}
+# Seleciona colunas de interesse.
+malaria <- malaria %>% select(all_of(COLS))
 
-```{r}
-<<<<<<< Updated upstream
-# Convertendo todas as colunas para fatores
-malaria <- malaria %>% mutate_all(as.factor)
-=======
-#tipagem dos dadoss
-malaria <- malaria %>%
-  mutate(
-    notification.month = as.numeric(as.character(notification.month)),
-    notification.year = as.numeric(as.character(notification.year)),
-  )
-
+# arules trabalha com transações: TODAS as colunas precisam ser fator.
+# (Conflito de merge resolvido: a tipagem numérica de mês/ano é útil só para
+#  EDA; para mineração convertemos tudo para fator.)
+malaria <- malaria %>% mutate(across(everything(), as.factor))
 glimpse(malaria)
->>>>>>> Stashed changes
 ```
 
-```{r}
-#Rafael - Apriori em desenvolvimento
-#Geração de candidatos
-gerarCandidadtos(L_{k-1}){
-  #SELECT p.item1, p.item2, ..., p.item_{k-1}, q.item_{k-1}
-  #FROM L_{k-1} p, L_{k-1} q
-  #WHERE p.item1 = q.item1 AND 
-  #p.item2 = q.item2 AND 
-  #... AND
-  #p.item_{k-2} = q.item_{k-2} AND
-  #p.item_{k-1} < q.item_{k-1}-- Poda usando subconjuntos infrequentes
-  #AND NOT EXISTS (
-  #SELECT * FROM Infrequent_Sets i
-  #WHERE i.subset_of(p.item1, ..., q.item_{k-1})
-}
-
-#Implementacao Apriori
-#definir limiar
-Apriori(malaria, limiar){
-  L={}
-  k = 2
-  
-  #
-  while L_{k-1} != NULL{
-    C_k = gerarCandidatos(L_{k-1})
-    
-    for malaria in malaria{
-      C_t = subconjunto(C_t) 
-      for c in C_t{
-        c.count += 1
-      }
-    }
-    
-    #buscar representação para linha seguinte
-    #L_k := {c ∈ C_k | c.count ≥ ε};
-    k = k + 1;
-  }
-  #buscar representação para linha seguinte
-  #L := _k L_k
-  return L
-}
-```
-
-
-```{r}
-# Convertendo o dataframe para um objeto de transações
+```{r transactions}
 transacoes_malaria <- as(malaria, "transactions")
 summary(transacoes_malaria)
 ```
 
-```{r}
-# Criando a interface unificada fit()
-fit_mineracao <- function(transacoes, algoritmo = "apriori", min_sup = 0.01, min_conf = 0.8, min_len = 3, max_len = 4) {
-  
-    # O artigo define confiança de 80% e tamanhos mínimo 3 e máximo 4
-    regras <- apriori(transacoes, 
-                      parameter = list(supp = min_sup, conf = min_conf, 
-                                       minlen = min_len, maxlen = max_len, target = "rules"))
-    return(regras)
-    
+```{r fit-interface}
+# Interface unificada de mineração. O artigo de referência usa confiança 80%
+# e tamanho de regra entre 3 e 4 itens.
+fit_mineracao <- function(transacoes,
+                          algoritmo = "apriori",
+                          min_sup = 0.01, min_conf = 0.8,
+                          min_len = 3, max_len = 4) {
+  algoritmo <- match.arg(algoritmo, c("apriori"))
+  apriori(
+    transacoes,
+    parameter = list(supp = min_sup, conf = min_conf,
+                     minlen = min_len, maxlen = max_len, target = "rules"),
+    control   = list(verbose = FALSE)
+  )
 }
 ```
 
-
-```{r}
+```{r run}
 regras_apriori <- fit_mineracao(transacoes_malaria, algoritmo = "apriori")
+message(sprintf("Regras geradas: %d", length(regras_apriori)))
+inspect(head(sort(regras_apriori, by = "lift"), 10))
 ```
-
