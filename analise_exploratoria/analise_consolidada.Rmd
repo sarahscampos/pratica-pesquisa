@@ -1,0 +1,264 @@
+---
+title: "Análise Exploratória — Malária (2016–2019)"
+output: html_notebook
+---
+
+
+```{r config}
+# =============================================================================
+# CONFIGURAÇÃO — ajuste apenas este bloco
+# =============================================================================
+# Pasta com os arquivos malaria_201X.RData. Relativa a ESTE arquivo .Rmd.
+DATA_DIR  <- file.path("..", "datasets")
+ANOS      <- 2016:2019
+PAIS_FOCO <- "Brazil"
+# =============================================================================
+```
+
+```{r install, eval=FALSE}
+# Execute UMA vez por máquina (eval=FALSE: não roda no knit).
+pacotes <- c("tidyverse", "lubridate", "sf",
+             "scales", "moments", "skimr", "geodata", "terra")
+install.packages(setdiff(pacotes, rownames(installed.packages())))
+```
+
+```{r setup, message=FALSE, warning=FALSE}
+library(tidyverse)   # dplyr, ggplot2, tidyr, ...
+library(lubridate)
+library(geobr)
+library(sf)
+library(scales)
+library(moments)     # skewness / kurtosis
+library(skimr)
+library(geodata)
+
+ufs <- geodata::gadm(country = "BRA", level = 1, path = tempdir())
+br_states <- st_as_sf(ufs)
+```
+
+```{r}
+siglas <- data.frame(
+  NAME_1 = c(
+    "Acre", "Alagoas", "Amapá", "Amazonas", "Bahia",
+    "Ceará", "Distrito Federal", "Espírito Santo", "Goiás",
+    "Maranhão", "Mato Grosso", "Mato Grosso do Sul",
+    "Minas Gerais", "Paraná", "Paraíba", "Pará",
+    "Pernambuco", "Piauí", "Rio de Janeiro",
+    "Rio Grande do Norte", "Rio Grande do Sul",
+    "Rondônia", "Roraima", "Santa Catarina",
+    "São Paulo", "Sergipe", "Tocantins"
+  ),
+  abbrev_state = c(
+    "AC","AL","AP","AM","BA",
+    "CE","DF","ES","GO",
+    "MA","MT","MS",
+    "MG","PR","PB","PA",
+    "PE","PI","RJ",
+    "RN","RS",
+    "RO","RR","SC",
+    "SP","SE","TO"
+  )
+)
+```
+
+
+```{r load-data}
+# Carrega cada ano (cada .RData expõe o objeto `data`) e empilha tudo.
+ler_ano <- function(ano) {
+  caminho <- file.path(DATA_DIR, sprintf("malaria_%d.RData", ano))
+  if (!file.exists(caminho)) stop(sprintf("Arquivo não encontrado: %s", caminho))
+  e <- new.env()
+  load(caminho, envir = e)          # evita poluir o ambiente global
+  get("data", envir = e) %>% mutate(ano = ano)
+}
+
+malaria <- map_dfr(ANOS, ler_ano)
+glimpse(malaria)
+```
+
+```{r overview}
+str(malaria)
+skim(malaria)
+```
+
+```{r typing}
+# Datas vêm como fator/character; converte os campos de mês/ano para numérico.
+malaria <- malaria %>%
+  mutate(across(
+    c(notification.month, notification.year,
+      exam.month, exam.year,
+      treatment.month, treatment.year,
+      symptom.month, symptom.year),
+    ~ as.numeric(as.character(.x))
+  ))
+glimpse(malaria)
+```
+
+```{r filter}
+# Escopo da análise: 2016–2019, apenas Brasil, sem duplicatas.
+malaria <- malaria %>%
+  filter(notification.year >= min(ANOS),
+         notification.year <= max(ANOS),
+         infection.country == PAIS_FOCO) %>%
+  distinct()
+```
+
+```{r features}
+# Data de notificação (1º dia do mês) e rótulo do tipo de malária.
+malaria <- malaria %>%
+  mutate(
+    notification.date = as.Date(
+      sprintf("%d-%02d-01", notification.year, notification.month)
+    ),
+    malaria.type = case_when(
+      exam.result == "negative"   ~ "Negativo",
+      exam.result == "vivax"      ~ "Vivax",
+      exam.result == "falciparum" ~ "Falciparum",
+      TRUE                        ~ "Outros"
+    ),
+    exam.binary = if_else(is.na(exam.result), NA_character_,
+                          if_else(exam.result == "negative", "Negativo", "Positivo"))
+  )
+
+unique(malaria$exam.result)
+```
+
+## Mapa: proporção de casos positivos por estado
+
+```{r mapa, message=FALSE}
+total_brasil <- nrow(malaria)
+
+estado_resumo <- malaria %>%
+  mutate(positive = exam.result != "negative") %>%
+  group_by(notification.state) %>%
+  summarise(positivos = sum(positive, na.rm = TRUE), .groups = "drop") %>%
+  mutate(percentual = positivos / total_brasil * 100) %>%
+  rename(abbrev_state = notification.state)
+
+br_states <- left_join(br_states, siglas, by = "NAME_1")
+
+mapa <- left_join(
+  br_states,
+  estado_resumo,
+  by = "abbrev_state"
+)
+centros <- sf::st_centroid(mapa)
+
+ggplot(mapa) +
+  geom_sf(aes(fill = percentual)) +
+  geom_sf_label(data = centros, aes(label = abbrev_state), size = 2) +
+  scale_fill_viridis_c(option = "plasma", na.value = "grey90") +
+  labs(title = "Proporção de casos positivos de malária no Brasil (2016–2019)",
+       fill = "Percentual (%)") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Evolução temporal
+
+```{r serie-temporal, message=FALSE}
+casos_tempo <- malaria %>%
+  group_by(notification.date, exam.binary) %>%
+  summarise(total = n(), .groups = "drop")
+
+ggplot(casos_tempo, aes(notification.date, total, color = exam.binary)) +
+  geom_line(linewidth = 1) +
+  labs(title = "Evolução dos casos de malária (2016–2019)",
+       x = "Ano", y = "Número de exames", color = "Resultado") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r tipos-positivos}
+malaria %>%
+  filter(exam.result != "negative") %>%
+  mutate(tipo = case_when(exam.result == "falciparum" ~ "Falciparum",
+                          exam.result == "vivax"      ~ "Vivax",
+                          TRUE                        ~ "Outros")) %>%
+  ggplot(aes(notification.year, fill = tipo)) +
+  geom_bar() +
+  labs(title = "Resultados positivos de malária por ano",
+       x = "Ano", y = "Número de casos", fill = "") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Distribuição por raça
+
+```{r raca}
+malaria_race <- malaria %>%
+  count(race) %>%
+  mutate(proporcao = n / sum(n),
+         label = scales::percent(proporcao, accuracy = 0.1))
+
+ggplot(malaria_race, aes(reorder(race, n), n, fill = race)) +
+  geom_col(width = 0.7, show.legend = FALSE) +
+  geom_text(aes(label = label), hjust = -0.1) +
+  coord_flip() +
+  labs(title = "Distribuição de casos por raça", x = "Raça", y = "Número de casos") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Estatísticas descritivas — quantidade de parasitas (contrib. Rafael)
+
+```{r stats-parasitas}
+q <- malaria$qty.parasites
+
+moda <- function(x) {
+  x <- x[!is.na(x)]
+  u <- unique(x)
+  u[which.max(tabulate(match(x, u)))]
+}
+
+tibble(
+  na          = sum(is.na(q)),
+  n           = length(q),
+  media       = mean(q, na.rm = TRUE),
+  mediana     = median(q, na.rm = TRUE),
+  moda        = moda(q),
+  variancia   = var(q, na.rm = TRUE),
+  desvio      = sd(q, na.rm = TRUE),
+  amplitude   = diff(range(q, na.rm = TRUE)),
+  iqr         = IQR(q, na.rm = TRUE),
+  cv          = sd(q, na.rm = TRUE) / mean(q, na.rm = TRUE),
+  assimetria  = skewness(q, na.rm = TRUE),
+  curtose     = kurtosis(q, na.rm = TRUE)
+) %>% glimpse()
+
+quantile(q, probs = c(.10, .25, .50, .75, .90), na.rm = TRUE)
+```
+
+```{r graficos-parasitas, warning=FALSE}
+ggplot(malaria, aes(qty.parasites)) +
+  geom_histogram(bins = 30, fill = "steelblue", na.rm = TRUE) +
+  labs(title = "Distribuição da quantidade de parasitas por caso",
+       x = "Quantidade de parasitas", y = "Frequência") +
+  theme_minimal()
+
+ggplot(malaria, aes(gender, qty.parasites)) +
+  geom_boxplot(fill = "tomato", na.rm = TRUE) +
+  labs(title = "Quantidade de parasitas por gênero", x = "Gênero", y = "Parasitas") +
+  theme_minimal()
+```
+
+## Simetria da idade ao longo dos anos (contrib. Gustavo)
+
+```{r simetria-idade, warning=FALSE}
+idade <- malaria %>% mutate(age = as.numeric(age))
+
+idade %>%
+  group_by(ano) %>%
+  summarise(Media      = mean(age, na.rm = TRUE),
+            Mediana    = median(age, na.rm = TRUE),
+            Assimetria = skewness(age, na.rm = TRUE),
+            .groups = "drop")
+
+ggplot(idade, aes(age, fill = factor(ano))) +
+  geom_density(alpha = 0.5) +
+  facet_wrap(~ano) +
+  xlim(0, 20) +
+  labs(title = "Evolução da simetria da idade dos pacientes (2016–2019)",
+       x = "Idade", y = "Densidade", fill = "Ano") +
+  theme_minimal()
+```
