@@ -50,3 +50,112 @@ ggplot(df_plot, aes(Abordagem, Num_Regras, fill = Abordagem)) +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5, face = "bold"))
 ```
+```{r}
+e <- new.env()
+
+load("malaria-rules-g5.RData", envir = e)
+
+ls(e)
+```
+
+
+```{r}
+resumo_regras <- function(arquivo, nome) {
+
+  e <- new.env()
+  load(arquivo, envir = e)
+
+  regras <- get(ls(e)[1], envir = e)
+
+  data.frame(
+    Metodo = nome,
+    Num_Regras = nrow(regras),
+
+    Support_Medio = mean(regras$support, na.rm = TRUE),
+    Support_Max   = max(regras$support, na.rm = TRUE),
+
+    Confidence_Media = mean(regras$confidence, na.rm = TRUE),
+    Confidence_Max   = max(regras$confidence, na.rm = TRUE),
+
+    Lift_Medio = mean(regras$lift, na.rm = TRUE),
+    Lift_Max   = max(regras$lift, na.rm = TRUE),
+
+    Kulc_Medio = mean(regras$kulc, na.rm = TRUE),
+    IR_Medio   = mean(regras$ir, na.rm = TRUE)
+  )
+}
+```
+
+```{r}
+comparacao <- bind_rows(
+  resumo_regras("malaria-rules-g5.RData", "g5"),
+  resumo_regras("malaria-rules-lais.RData", "lais")
+)
+
+knitr::kable(
+  comparacao,
+  digits = 3,
+  caption = "Comparação das métricas das regras"
+)
+```
+```{r}
+ggplot(comparacao,
+       aes(Metodo, Lift_Medio, fill = Metodo)) +
+  geom_col(show.legend = FALSE) +
+  labs(
+    title = "Lift médio por abordagem",
+    x = "",
+    y = "Lift médio"
+  ) +
+  theme_minimal()
+```
+```{r}
+ggplot(comparacao,
+       aes(Metodo, Confidence_Media, fill = Metodo)) +
+  geom_col(show.legend = FALSE) +
+  labs(
+    title = "Confidence média por abordagem",
+    x = "",
+    y = "Confidence média"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+e <- new.env()
+load("malaria-rules-g5.RData", envir = e)
+
+regras <- get(ls(e)[1], envir = e)
+
+regras %>%
+  arrange(desc(lift)) %>%
+  select(lhs, rhs, support, confidence, lift) %>%
+  head(10)
+```
+```{r}
+regras %>%
+  arrange(desc(confidence)) %>%
+  select(lhs, rhs, support, confidence, lift) %>%
+  head(10)
+```
+```{r}
+top_lift <- function(arquivo, metodo) {
+
+  e <- new.env()
+  load(arquivo, envir = e)
+
+  regras <- get(ls(e)[1], envir = e)
+
+  regras %>%
+    arrange(desc(lift)) %>%
+    select(lhs, rhs, support, confidence, lift) %>%
+    head(10) %>%
+    mutate(metodo = metodo)
+}
+
+bind_rows(
+  top_lift("malaria-rules-g5.RData", "g5"),
+  top_lift("malaria-rules-lais.RData", "lais")
+)
+```
+
