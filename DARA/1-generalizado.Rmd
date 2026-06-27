@@ -3,27 +3,24 @@ title: "1-generalizado"
 output: html_document
 ---
 
----
-title: "1-generate-rules"
-output: html_document
----
 ```{r}
+getwd()
+list.files("datasets-malaria")
+```
 
-files <- c(
-  "malaria_2016.RData",
-  "malaria_2017.RData",
-  "malaria_2018.RData",
-  "malaria_2019.RData"
+```{r}
+suppressPackageStartupMessages({ library(dplyr) })
+
+INPUT_FILES <- list(
+  "datasets-malaria/malaria_2016.RData",
+  "datasets-malaria/malaria_2017.RData",
+  "datasets-malaria/malaria_2018.RData",
+  "datasets-malaria/malaria_2019.RData"
 )
 
-datasets <- lapply(files, function(file){
-
-  objs <- load(
-    file.path("~/pratica-pesquisa/DARA/datasets-malaria", file)
-  )
-
+datasets <- lapply(INPUT_FILES, function(file){
+  objs <- load(file)
   get(objs[1])
-
 })
 
 malaria <- bind_rows(datasets)
@@ -34,7 +31,6 @@ save(
 )
 ```
 
-
 ```{r config}
 # =============================================================================
 # CONFIGURAÇÃO — editar apenas este bloco para usar com qualquer dataset
@@ -42,15 +38,15 @@ save(
 
 INPUT_FILE     <- "dataset.RData"
 
-SELECTED_COLS  <- NULL # descomentar para usar todas as colunas
+SELECTED_COLS <- NULL
 
 RHS_TARGET     <- "exam.result=vivax"   
 RHS_ATTR      <- "exam.result"
 RHS_VALUE     <- "vivax"
 
-APRIORI_SUPP  <- 0.05
-APRIORI_CONF  <- 0.8
-APRIORI_MINLEN <- 3
+APRIORI_SUPP   <- 0.01
+APRIORI_CONF   <- 0.5
+APRIORI_MINLEN <- 2
 APRIORI_MAXLEN <- 4
 
 MIN_LIFT       <- 1
@@ -156,10 +152,14 @@ if (length(rules) > 0) {
   lhs_items <- str_split(dataset$lhs, ",")
   for (i in seq_along(lhs_items)) {
     for (kv in lhs_items[[i]]) {
-      nv <- str_split(trimws(kv), "=", simplify = TRUE)
-      if (ncol(nv) == 2) {
-        col_name <- trimws(nv[1, 1])
-        if (col_name %in% names(dataset)) dataset[i, col_name] <- trimws(nv[1, 2])
+      kv_clean <- trimws(kv)
+      nv <- str_split(kv_clean, "=", n = 2, simplify = TRUE)
+      if (ncol(nv) == 2 && nv[1,1] != "" && nv[1,2] != "") {
+        col_name  <- trimws(nv[1, 1])
+        col_value <- trimws(nv[1, 2])
+        if (col_name %in% names(dataset)) {
+          dataset[i, col_name] <- col_value
+        }
       }
     }
   }

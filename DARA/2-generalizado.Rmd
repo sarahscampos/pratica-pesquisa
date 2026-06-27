@@ -3,44 +3,35 @@ title: "2-generalizado"
 output: html_document
 ---
 
----
-title: "2-divergent-ranking"
-output: html_document
----
-
-```{r config}
-# =============================================================================
-# CONFIGURAÇÃO — editar apenas este bloco para usar com qualquer dataset
-# =============================================================================
-
-INPUT_FILE    <- "malaria.RData"
-
-SELECTED_COLS <- NULL # descomentar para usar todas as colunas
+```{r}
+# CONFIGURAÇÃO
+INPUT_FILES <- list(
+  "datasets-malaria/malaria_2016.RData",
+  "datasets-malaria/malaria_2017.RData",
+  "datasets-malaria/malaria_2018.RData",
+  "datasets-malaria/malaria_2019.RData"
+)
+RDATA_OBJECT  <- "data"
 
 RULES_FILE    <- "malaria-rules-g5.RData"
+RULES_OBJECT  <- "dataset"    # nome do objeto dentro do RData de regras
 
-RHS_TARGET     <- "exam.result=vivax"   
+SELECTED_COLS <- NULL
 RHS_ATTR      <- "exam.result"
 RHS_VALUE     <- "vivax"
-
-# =============================================================================
 ```
 
-```{r setup, message=FALSE, warning=FALSE}
-suppressPackageStartupMessages({
-  library(dplyr)
-})
+```{r}
+suppressPackageStartupMessages({ library(dplyr) })
 
 resolve_path <- function(fname) {
   if (file.exists(fname)) return(fname)
 
-  p <- file.path("data", fname)
-
+  p <- file.path("DARA", fname)
   if (file.exists(p)) return(p)
 
   stop(sprintf("Arquivo não encontrado: %s", fname))
 }
-
 
 load_rdata <- function(file) {
 
@@ -69,7 +60,7 @@ load_rdata <- function(file) {
 ```{r load-data}
 #raw      <- read_csv(resolve_path(INPUT_FILE),  show_col_types = FALSE)
 #rules_df <- read_csv(resolve_path(RULES_FILE),  show_col_types = FALSE)
-raw <- load_rdata(INPUT_FILE)
+raw <- bind_rows(lapply(INPUT_FILES, load_rdata))
 
 rules_df <- load_rdata(RULES_FILE)
 
@@ -94,8 +85,30 @@ message(sprintf("Linhas após filtro '%s == %s': %d", RHS_ATTR, RHS_VALUE, nrow(
 data[[RHS_ATTR]] <- NULL
 ```
 
-```{r divergent-ranking}
-results <- list()
+```{r}
+# Limites de classificação
+LIMIAR_LEVE     <- 1
+LIMIAR_MODERADA <- 2
+LIMIAR_FORTE    <- 3
+
+classificar_divergencia <- function(c) {
+  ac <- abs(c)
+  if (ac == 0)                    return("sem divergencia")
+  if (ac < LIMIAR_MODERADA)       return("leve")
+  if (ac < LIMIAR_FORTE)          return("moderada")
+  return("forte")
+}
+
+results  <- list()
+resumo   <- data.frame(
+  atributo       = character(),
+  value          = character(),
+  dataset        = integer(),
+  rules          = integer(),
+  c              = integer(),
+  divergencia    = character(),
+  stringsAsFactors = FALSE
+)
 
 for (atributo in colnames(data)) {
   t_dataset <- table(data[[atributo]])
@@ -114,26 +127,37 @@ for (atributo in colnames(data)) {
   merged$c     <- 0
   n            <- nrow(merged)
 
-  if (n > 1) {
-    for (j in 1:(n - 1)) {
+  if (n > 1)
+    for (j in 1:(n - 1))
       for (k in (j + 1):n) {
-        ds_j <- merged$dataset[j]; ds_k <- merged$dataset[k]
-        ru_j <- merged$rules[j];   ru_k <- merged$rules[k]
-
-        if (ds_j > ds_k && ru_j < ru_k) {
+        if (merged$dataset[j] > merged$dataset[k] && merged$rules[j] < merged$rules[k]) {
           merged$c[j] <- merged$c[j] - 1; merged$c[k] <- merged$c[k] + 1
-        } else if (ds_j < ds_k && ru_j > ru_k) {
+        } else if (merged$dataset[j] < merged$dataset[k] && merged$rules[j] > merged$rules[k]) {
           merged$c[j] <- merged$c[j] + 1; merged$c[k] <- merged$c[k] - 1
         }
       }
-    }
-  }
 
-  merged              <- merged[order(merged$c), ]
+  # Classifica cada valor
+  merged$divergencia <- sapply(merged$c, classificar_divergencia)
+  merged <- merged[order(merged$c), ]
   results[[atributo]] <- merged
-  message(sprintf("Atributo processado: %s", atributo))
-  print(merged)
+
+  # Acumula no resumo geral
+  merged$atributo <- atributo
+  resumo <- rbind(resumo, merged[, c("atributo","value","dataset","rules","c","divergencia")])
+
+  message(sprintf("Atributo: %s", atributo))
+  print(merged[, c("value","dataset","rules","c","divergencia")])
 }
 
-message(sprintf("Total de atributos processados: %d", length(results)))
+# Resumo geral ordenado por |c|
+resumo$c_abs <- abs(resumo$c)
+resumo <- resumo[order(-resumo$c_abs), ]
+
+message("\n====== RANKING GERAL DE DIVERGÊNCIA ======")
+print(resumo)
+
+# Contagem por nível
+message("\n====== CONTAGEM POR NÍVEL ======")
+print(table(resumo$divergencia))
 ```
